@@ -1,5 +1,7 @@
 import numpy as np
 import random
+import os
+import pandas as pd
 
 
 
@@ -161,6 +163,14 @@ class Board():
             (self.arr[:27] == 0) & (self.arr[27:] == 0))
         return moves
 
+    def display(self):
+    exs = self.arr[:27]
+    ohs = self.arr[27:]*-1
+    merged_board = pd.DataFrame(np.reshape(exs + ohs,(9,3)))
+    merged_board = merged_board.replace([0, 1, -1],['*', 'X', 'O'])
+    separator = pd.DataFrame({0:'=', 1:'=', 2:'='},index = [0])
+    board = pd.concat([merged_board[:3], separator, merged_board[3:6], separator, merged_board[6:]],axis=0).reset_index(drop=True)
+    return board
 
     def display(self):
         print(f"player {self.player1} Xs at:")
