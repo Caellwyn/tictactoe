@@ -164,7 +164,7 @@ class Board():
         return moves
 
 
-    def display(board):
+    def display(self):
         exs = np.reshape(board.arr[:27],(9,3))
         ohs = np.reshape(board.arr[27:]*-1,(9,3))
         merged_board = pd.DataFrame(exs + ohs)
@@ -172,16 +172,6 @@ class Board():
         separator = pd.DataFrame({0:'=', 1:'=', 2:'='},index = [0])
         board = pd.concat([merged_board[:3], separator, merged_board[3:6], separator, merged_board[6:]],axis=0).reset_index(drop=True)
         return board
-
-    def display(self):
-        print(f"player {self.player1} Xs at:")
-        for i in np.argwhere(self.arr[:27] == 1):
-            x, y, z = index_to_coords(i)
-            print(f"{x} {y} {z}")
-        print(f"player {self.player2} Os at:")
-        for i in np.argwhere(self.arr[27:] == 1):
-            x, y, z = index_to_coords(i)
-            print(f"{x} {y} {z}")
 
 
     def game_over(self):
