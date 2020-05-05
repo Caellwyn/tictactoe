@@ -152,24 +152,25 @@ class HumanPlayer():
 class Board():
 
     def __init__(self, player1, player2):
-        self.arr = np.zeros((1, 54))
+        self.arr = np.zeros((54))
         self.score = None
         self.turn = 'Xs'
         self.player1 = player1
         self.player2 = player2
 
     def legal_moves(self):
-        moves = np.argwhere(
-            (self.arr[:27] == 0) & (self.arr[27:] == 0))
+        moves = np.concatenate(np.argwhere(
+            (self.arr[:27] == 0) & (self.arr[27:] == 0)))
         return moves
+
 
 
     def display(self):
         exs = np.reshape(self.arr[:27],(9,3))
         ohs = np.reshape(self.arr[27:]*-1,(9,3))
         merged_board = pd.DataFrame(exs + ohs)
-        merged_board = merged_board.replace([0, 1, -1],['*', 'X', 'O'])
-        separator = pd.DataFrame({0:'=', 1:'=', 2:'='},index = [0])
+        merged_board = merged_board.replace([0, 1, -1],[' ', 'X', 'O'])
+        separator = pd.DataFrame({0:'-', 1:'-', 2:'-'},index = [0])
         board = pd.concat([merged_board[:3], separator, merged_board[3:6], separator, merged_board[6:]],axis=0).reset_index(drop=True)
         return board
 
@@ -212,7 +213,7 @@ class Board():
                  self.turn = "Xs"
         else:
             islegal = False
-        return board, islegal
+        return islegal
 
 def play_loop(exs, ohs):
     board = Board(exs.name, ohs.name)
