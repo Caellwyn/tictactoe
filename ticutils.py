@@ -165,8 +165,8 @@ class Board():
 
 
     def display(self):
-        exs = np.reshape(board.arr[:27],(9,3))
-        ohs = np.reshape(board.arr[27:]*-1,(9,3))
+        exs = np.reshape(self.arr[:27],(9,3))
+        ohs = np.reshape(self.arr[27:]*-1,(9,3))
         merged_board = pd.DataFrame(exs + ohs)
         merged_board = merged_board.replace([0, 1, -1],['*', 'X', 'O'])
         separator = pd.DataFrame({0:'=', 1:'=', 2:'='},index = [0])
