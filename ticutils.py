@@ -1,8 +1,7 @@
 import numpy as np
 import random
-import os
 import pandas as pd
-
+from IPython.display import display
 
 
 
@@ -126,8 +125,7 @@ class HumanPlayer():
 
     def query_human(self, insult = False):
         print('Please enter a number the x, y, and z coordinates of '
-            'your move in that order, separated by a comma and a space')
-        print('insult is set to: ', insult)
+            'your move in that order, separated by a space')
         if insult:
             print('Try a LEGAL move, dipshit')
         coords = input().split()
@@ -172,7 +170,7 @@ class Board():
         merged_board = merged_board.replace([0, 1, -1],[' ', 'X', 'O'])
         separator = pd.DataFrame({0:'-', 1:'-', 2:'-'},index = [0])
         board = pd.concat([merged_board[:3], separator, merged_board[3:6], separator, merged_board[6:]],axis=0).reset_index(drop=True)
-        return board
+        display(board)
 
 
     def game_over(self):
@@ -210,7 +208,7 @@ class Board():
             if self.turn == "Xs":
                 self.turn = "Os"
             else:
-                 self.turn = "Xs"
+                self.turn = "Xs"
         else:
             islegal = False
         return islegal
