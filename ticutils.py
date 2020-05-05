@@ -1,7 +1,7 @@
 import numpy as np
 import random
 import pandas as pd
-from IPython.display import display
+from IPython.display import display, clear_output
 
 
 
@@ -96,7 +96,6 @@ def init_wincon_matrix():
         y = 2 - x
         put()
     col += 1
-    print(col)
 
 class BaselinePlayer():
     def __init__(self):
@@ -104,7 +103,6 @@ class BaselinePlayer():
 
     def get_move(self, board):
         legal_moves = board.legal_moves()
-        print(f"legal_moves are {legal_moves}")
         return random.choice(legal_moves)
 
     def finalize(self):
@@ -115,9 +113,9 @@ class HumanPlayer():
         self.name = name
 
     def get_move(self, board):
+        clear_output()
         board.display()
         legal_moves = board.legal_moves()
-        print(legal_moves)
         move = self.query_human()
         while move not in legal_moves:
             move = self.query_human(insult = True)
@@ -138,11 +136,11 @@ class HumanPlayer():
         board.display()
         if board.score == 1:
             print("Xs win")
-        if board.score == -1:
+        elif board.score == -1:
             print("Os win")
-        if board.score == 0:
+        elif board.score == 0:
             print("draw")
-        if board.score is None:
+        elif board.score is None:
             print("Game incomplete")
         else:
             assert False, "score is invalid"
