@@ -145,61 +145,6 @@ class HumanPlayer():
         else:
             assert False, "score is invalid"
 
-class AIPlayer():
-
-    def __init__(self, model, name="CPU", train = False):
-        self.model = model
-        self.train = train
-        self.lastboard = None
-        self.lastmove = None
-        self.name = name
-        self.losses = []
-
-    def get_move(self, board):
-        legal_moves = set(board.legal_moves())
-        if board.turn == 'Os':
-            current_board = np.concatenate([board.arr[27:],board.arr[:27]], axis=0)
-            current_board = current_board.reshape(1,54)
-        else:
-            current_board = board.arr.reshape(1,54)
-
-        move_values = model.predict(current_board)
-        current_move = np.argmax(move_values)
-
-        if current_move not in legal_moves:
-            print(f"idiot tried to play{current_move}")
-            current_move = random.choice(list(legal_moves))
-            print(f"playing {current_move} instead")
-        #backprop
-        if self.lastboard is not None and self.train:
-            Y = np.full((1,27),np.nan)
-            for move in range(27):
-                if move not in legal_moves:
-                    Y[0, move] = -1
-            Y[0, self.lastmove] = move_values[0,current_move]
-            history = model.fit(self.lastboard, Y)
-            self.losses.append(history.history['loss'][0])
-        self.lastboard = current_board.copy()
-        self.lastmove = current_move
-        return current_move
-
-    def finalize(self, board):
-        legal_moves = set(board.legal_moves())
-        if self.train:
-            Y = np.full((1,27),np.nan)
-            for move in range(27):
-                if move not in legal_moves:
-                    Y[0, move] = -1
-            Y[0, self.lastmove] = board.score
-            history = model.fit(self.lastboard, Y)
-            self.losses.append(history.history['loss'][0])
-            print((sum(self.losses)/len(self.losses)))
-            self.lastloss = self.losses
-
-        self.lastboard = None
-        self.lastmove = None
-        self.losses = []
-
 class Board():
 
     def __init__(self, player1, player2):
@@ -215,7 +160,17 @@ class Board():
         return moves
 
 
+
     def display(self):
+        exs = np.reshape(self.arr[:27],(9,3))
+        ohs = np.reshape(self.arr[27:]*-1,(9,3))
+        merged_board = pd.DataFrame(exs + ohs)
+        merged_board = merged_board.replace([0, 1, -1],[' ', 'X', 'O'])
+        separator = pd.DataFrame({0:'-', 1:'-', 2:'-'},index = [0])
+        board = pd.concat([merged_board[:3], separator, merged_board[3:6], separator, merged_board[6:]],axis=0).reset_index(drop=True)
+        display(board)
+
+    def display2(self):
         def getvals(i):
             if self.arr[i]:
                 return "X"
@@ -281,11 +236,6 @@ class Board():
             islegal = False
         return islegal
 
-def tictacloss(y_true,y_pred):
-    squares = (y_true - y_pred)**2
-    squares = tf.where(tf.math.is_nan(squares), tf.zeros_like(squares), squares)
-    return tf.reduce_sum(squares, axis=0)
-
 def play_loop(exs, ohs):
     board = Board(exs.name, ohs.name)
     current_player = exs
@@ -309,3 +259,8 @@ def index_to_coords(i):
     y = (i // 3) % 3
     z = i // 9
     return x, y, z
+
+def tictacloss(y_true,y_pred):
+    squares = (y_true - y_pred)**2
+    squares = tf.where(tf.math.is_nan(squares), tf.zeros_like(squares), squares)
+    return tf.reduce_sum(squares, axis=0)
