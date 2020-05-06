@@ -168,7 +168,7 @@ class AIPlayer():
         else:
             current_board = board.arr.reshape(1,54)
 
-        move_values = model.predict(current_board)
+        move_values = self.model.predict(current_board)
         current_move = np.argmax(move_values)
 
         if current_move not in legal_moves:
@@ -182,7 +182,7 @@ class AIPlayer():
                 if move not in legal_moves:
                     Y[0, move] = -1
             Y[0, self.lastmove] = move_values[0,current_move]
-            history = model.fit(self.lastboard, Y)
+            history = self.model.fit(self.lastboard, Y)
             self.losses.append(history.history['loss'][0])
         self.lastboard = current_board.copy()
         self.lastmove = current_move
@@ -196,7 +196,7 @@ class AIPlayer():
                 if move not in legal_moves:
                     Y[0, move] = -1
             Y[0, self.lastmove] = board.score
-            history = model.fit(self.lastboard, Y)
+            history = self.model.fit(self.lastboard, Y)
             self.losses.append(history.history['loss'][0])
             print((sum(self.losses)/len(self.losses)))
             self.lastloss = self.losses
@@ -285,7 +285,7 @@ class Board():
             islegal = False
         return islegal
 
-def mikesfirstmodel()
+def mikesfirstmodel():
     model = keras.Sequential([
 
         layers.Dense(16, activation='relu',
