@@ -170,6 +170,31 @@ class Board():
         board = pd.concat([merged_board[:3], separator, merged_board[3:6], separator, merged_board[6:]],axis=0).reset_index(drop=True)
         display(board)
 
+    def display2(self):
+        def getvals(i):
+            if self.arr[i]:
+                return "X"
+            if self.arr[i + 27]:
+                return "O"
+            return " "
+
+        vals = list(map(getvals, range(27)))
+
+        outer = []
+        for z in range(3):
+            inner = []
+            for y in range(3):
+                inner.append((f"{z} " if y == 1 else "  ") + f"{y}| " +
+                             " | ".join(vals[9 * z + 3 * y: 9 * z + 3 * y + 3]))
+            xline = "     0   1   2\n"
+            edge = "   +-----------+\n"
+
+            outer.append(xline + edge + " |\n   |-----------|\n".join(inner) +
+                         " |\n" + edge)
+
+        print(f"{self.player1} as Xs vs {self.player2} as Os\n")
+        print("\n\n".join(outer))
+        print(f"{self.turn} to play:")
 
     def game_over(self):
         board = self.arr.reshape((1, 54))
