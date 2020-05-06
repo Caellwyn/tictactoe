@@ -4,7 +4,6 @@ import pandas as pd
 from IPython.display import display, clear_output
 
 
-
 def best_of(moves):
     """
     Returns the index of the highest value in an array, corresponding to the predicted best move.
@@ -97,6 +96,7 @@ def init_wincon_matrix():
         put()
     col += 1
 
+
 class BaselinePlayer():
     def __init__(self):
         self.name = "Baseline"
@@ -108,6 +108,7 @@ class BaselinePlayer():
     def finalize(self, board):
         pass
 
+
 class HumanPlayer():
     def __init__(self, name="Human"):
         self.name = name
@@ -118,12 +119,12 @@ class HumanPlayer():
         legal_moves = board.legal_moves()
         move = self.query_human()
         while move not in legal_moves:
-            move = self.query_human(insult = True)
+            move = self.query_human(insult=True)
         return move
 
-    def query_human(self, insult = False):
+    def query_human(self, insult=False):
         print('Please enter a number the x, y, and z coordinates of '
-            'your move in that order, separated by a space')
+              'your move in that order, separated by a space')
         if insult:
             print('Try a LEGAL move, dipshit')
         coords = input().split()
@@ -144,6 +145,7 @@ class HumanPlayer():
             print("Game incomplete")
         else:
             assert False, "score is invalid"
+
 
 class Board():
 
@@ -225,6 +227,7 @@ class Board():
             islegal = False
         return islegal
 
+
 def play_loop(exs, ohs):
     board = Board(exs.name, ohs.name)
     current_player = exs
@@ -240,8 +243,9 @@ def play_loop(exs, ohs):
 
 
 def coords_to_index(x, y, z):
-    move = x + 3*y + 9*z
+    move = x + 3 * y + 9 * z
     return move
+
 
 def index_to_coords(i):
     x = i % 3
@@ -249,7 +253,8 @@ def index_to_coords(i):
     z = i // 9
     return x, y, z
 
-def tictacloss(y_true,y_pred):
-    squares = (y_true - y_pred)**2
+
+def tictacloss(y_true, y_pred):
+    squares = (y_true - y_pred) ** 2
     squares = tf.where(tf.math.is_nan(squares), tf.zeros_like(squares), squares)
     return tf.reduce_sum(squares, axis=0)
