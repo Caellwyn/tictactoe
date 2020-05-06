@@ -2,7 +2,10 @@ import numpy as np
 import random
 import pandas as pd
 from IPython.display import display, clear_output
-
+import tensorflow as tf
+import keras
+from keras.callbacks import History
+from keras import layers
 
 def best_of(moves):
     """
@@ -147,6 +150,61 @@ class HumanPlayer():
             assert False, "score is invalid"
 
 
+class AIPlayer():
+
+    def __init__(self, model, name="CPU", train = False):
+        self.model = model
+        self.train = train
+        self.lastboard = None
+        self.lastmove = None
+        self.name = name
+        self.losses = []
+
+    def get_move(self, board):
+        legal_moves = set(board.legal_moves())
+        if board.turn == 'Os':
+            current_board = np.concatenate([board.arr[27:],board.arr[:27]], axis=0)
+            current_board = current_board.reshape(1,54)
+        else:
+            current_board = board.arr.reshape(1,54)
+
+        move_values = model.predict(current_board)
+        current_move = np.argmax(move_values)
+
+        if current_move not in legal_moves:
+            print(f"idiot tried to play{current_move}")
+            current_move = random.choice(list(legal_moves))
+            print(f"playing {current_move} instead")
+        #backprop
+        if self.lastboard is not None and self.train:
+            Y = np.full((1,27),np.nan)
+            for move in range(27):
+                if move not in legal_moves:
+                    Y[0, move] = -1
+            Y[0, self.lastmove] = move_values[0,current_move]
+            history = model.fit(self.lastboard, Y)
+            self.losses.append(history.history['loss'][0])
+        self.lastboard = current_board.copy()
+        self.lastmove = current_move
+        return current_move
+
+    def finalize(self, board):
+        legal_moves = set(board.legal_moves())
+        if self.train:
+            Y = np.full((1,27),np.nan)
+            for move in range(27):
+                if move not in legal_moves:
+                    Y[0, move] = -1
+            Y[0, self.lastmove] = board.score
+            history = model.fit(self.lastboard, Y)
+            self.losses.append(history.history['loss'][0])
+            print((sum(self.losses)/len(self.losses)))
+            self.lastloss = self.losses
+
+        self.lastboard = None
+        self.lastmove = None
+        self.losses = []
+
 class Board():
 
     def __init__(self, player1, player2):
@@ -227,6 +285,27 @@ class Board():
             islegal = False
         return islegal
 
+def mikesfirstmodel()
+    model = keras.Sequential([
+
+        layers.Dense(16, activation='relu',
+                    #kernel_regularizer=tf.keras.regularizers.l1(0.01),
+                    #activity_regularizer=tf.keras.regularizers.l2(0.05)
+                    ),
+
+        layers.Dense(27, activation = 'tanh')
+        ])
+
+    #Model Hyperparameters
+    optimizer = tf.keras.optimizers.Adam(learning_rate=.1)
+    metrics = [tictacloss]
+
+    loss = tictacloss
+    #loss = 'mean_squared_error'
+
+
+    model.compile(loss=loss, optimizer=optimizer, metrics=metrics, callback = [History])
+    return model
 
 def play_loop(exs, ohs):
     board = Board(exs.name, ohs.name)
