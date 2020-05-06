@@ -105,7 +105,7 @@ class BaselinePlayer():
         legal_moves = board.legal_moves()
         return random.choice(legal_moves)
 
-    def finalize(self):
+    def finalize(self, board):
         pass
 
 class HumanPlayer():
