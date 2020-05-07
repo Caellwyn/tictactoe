@@ -6,6 +6,8 @@ import tensorflow as tf
 import keras
 from keras.callbacks import History
 from keras import layers
+import matplotlib.pyplot as plt
+
 
 def best_of(moves):
     """
@@ -160,15 +162,18 @@ class AIPlayer():
         self.lastlegal = None
         self.name = name
         self.losses = []
-        self.quiet = False
+        self.quiet = quiet
         self.current_illegal_move_count = 0
         self.last_illegal_move_count = None
+        self.current_move_count = 0
+        self.last_move_count = None
 
     def print(self, *args, **kwargs):
         if not self.quiet:
             print(*args, **kwargs)
 
     def get_move(self, board):
+        self.current_move_count += 1
         legal_moves = set(board.legal_moves())
         if board.turn == 'Os':
             current_board = np.concatenate([board.arr[27:],board.arr[:27]], axis=0)
@@ -217,7 +222,8 @@ class AIPlayer():
         self.losses = []
         self.last_illegal_move_count = self.current_illegal_move_count
         self.current_illegal_move_count = 0
-
+        self.last_move_count = self.current_move_count
+        self.current_move_count = 0
 
 class Board():
 
@@ -333,6 +339,7 @@ def play_loop(exs, ohs):
         next_player = temp
     exs.finalize(board, True)
     ohs.finalize(board, False)
+    return board.score
 
 
 def coords_to_index(x, y, z):
