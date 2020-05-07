@@ -194,7 +194,7 @@ class AIPlayer():
             Y = np.full((1,27), 2.)
             for move in range(27):
                 if move not in self.lastlegal:
-                    Y[0, move] = -1
+                    Y[0, move] = -2
             Y[0, self.lastmove] = move_values[0,current_move]
             history = self.model.fit(self.lastboard, Y, verbose=0 if self.quiet else 2)
             self.losses.append(history.history['loss'][0])
@@ -209,7 +209,7 @@ class AIPlayer():
             Y = np.full((1,27), 2.)
             for move in range(27):
                 if move not in self.lastlegal:
-                    Y[0, move] = -1
+                    Y[0, move] = -2
             Y[0, self.lastmove] = board.score * (-1 if not is_x else 1)
             history = self.model.fit(self.lastboard, Y, verbose=0 if self.quiet else 2)
             self.losses.append(history.history['loss'][0])
@@ -324,7 +324,7 @@ def mikesfirstmodel():
     #loss = 'mean_squared_error'
 
 
-    model.compile(loss=loss, optimizer=optimizer, metrics=metrics, callback = [History])
+    model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
     return model
 
 def play_loop(exs, ohs):
@@ -341,6 +341,52 @@ def play_loop(exs, ohs):
     ohs.finalize(board, False)
     return board.score
 
+def training_loop(model,opponent=BaselinePlayer(), epochs = 1, alpha = .9):
+    ai = AIPlayer(model,quiet=True,train=True)
+    isxs = True
+    scores = []
+    movelosses = []
+    finallosses = []
+    avgillegal = []
+
+    for games in range(epochs):
+        isxs = not isxs
+        if isxs:
+            score = play_loop(ai, opponent)
+        else:
+            score = -play_loop(opponent, ai)
+        finallosses.append(ai.lastloss[-1])
+        movelosses.append(sum(ai.lastloss[:-1])/len(ai.lastloss[:-1]))
+        scores.append(score)
+        avgillegal.append(ai.last_illegal_move_count/ai.last_move_count)
+        if games%10 == 0:
+            print('This is game number: ', games)
+
+    avgscores = [scores[0]]
+
+    for i in range(1, len(scores)):
+        avgscores.append((avgscores[i-1]*alpha) + (scores[i]*(1-alpha)))
+
+    avgavgillegal= [avgillegal[0]]
+
+    for i in range(1, len(avgillegal)):
+        avgavgillegal.append((avgavgillegal[i-1]*alpha) + (avgillegal[i]*(1-alpha)))
+
+    fig, (ax1,ax2,ax3, ax4) = plt.subplots(4,1)
+    ax1.plot(avgscores)
+    ax1.set_title('Final Scores')
+    ax2.plot(movelosses)
+    ax2.set_title('move losses')
+    ax3.plot(finallosses)
+    ax3.set_title('Final losses')
+    ax4.plot(avgavgillegal)
+    ax4.set_title('average illegal moves per move')
+    #plt.legend(loc='lower right')
+    fig.set_size_inches(6,12)
+
+    plt.show()
+
+
 
 def coords_to_index(x, y, z):
     move = x + 3 * y + 9 * z
@@ -355,6 +401,19 @@ def index_to_coords(i):
 
 
 def tictacloss(y_true, y_pred):
+    illegal_moves = y_true == -2
+    y_true = tf.where(illegal_moves, -tf.ones_like(y_true), y_true)
     squares = (y_true - y_pred) ** 2
     squares = tf.where(y_true == 2, tf.zeros_like(squares), squares)
+    return tf.reduce_sum(squares, axis=0)
+
+def tictacloss2(y_true, y_pred):
+    illegal_moves = y_true == -2
+    dont_cares = y_true == 2
+    squares = (y_true - y_pred) ** 2
+    squares = tf.where(illegal_moves & (y_pred < -2.), tf.zeros_like(squares), squares)
+
+    squares = tf.where(dont_cares & (tf.math.abs(y_pred) > 1), tf.math.abs(y_pred) - 1, squares)
+    squares = tf.where(dont_cares & (tf.math.abs(y_pred) <=1), tf.zeros_like(squares), squares)
+
     return tf.reduce_sum(squares, axis=0)
