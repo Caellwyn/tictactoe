@@ -157,9 +157,12 @@ class AIPlayer():
         self.train = train
         self.lastboard = None
         self.lastmove = None
+        self.lastlegal = None
         self.name = name
         self.losses = []
         self.quiet = False
+        self.current_illegal_move_count = 0
+        self.last_illegal_move_count = None
 
     def print(self, *args, **kwargs):
         if not self.quiet:
@@ -177,6 +180,7 @@ class AIPlayer():
         current_move = np.argmax(move_values)
 
         if current_move not in legal_moves:
+            self.current_illegal_move_count += 1
             self.print(f"idiot tried to play{current_move}")
             current_move = random.choice(list(legal_moves))
             self.print(f"playing {current_move} instead")
@@ -184,13 +188,14 @@ class AIPlayer():
         if self.lastboard is not None and self.train:
             Y = np.full((1,27), 2.)
             for move in range(27):
-                if move not in legal_moves:
+                if move not in self.lastlegal:
                     Y[0, move] = -1
             Y[0, self.lastmove] = move_values[0,current_move]
             history = self.model.fit(self.lastboard, Y, verbose=0 if self.quiet else 2)
             self.losses.append(history.history['loss'][0])
         self.lastboard = current_board.copy()
         self.lastmove = current_move
+        self.lastlegal = legal_moves
         return current_move
 
     def finalize(self, board, is_x):
@@ -198,7 +203,7 @@ class AIPlayer():
         if self.train:
             Y = np.full((1,27), 2.)
             for move in range(27):
-                if move not in legal_moves:
+                if move not in self.lastlegal:
                     Y[0, move] = -1
             Y[0, self.lastmove] = board.score * (-1 if not is_x else 1)
             history = self.model.fit(self.lastboard, Y, verbose=0 if self.quiet else 2)
@@ -208,7 +213,11 @@ class AIPlayer():
 
         self.lastboard = None
         self.lastmove = None
+        self.lastlegal = None
         self.losses = []
+        self.last_illegal_move_count = self.current_illegal_move_count
+        self.current_illegal_move_count = 0
+
 
 class Board():
 
