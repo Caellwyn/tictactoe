@@ -319,6 +319,7 @@ def play_loop(exs, ohs):
         next_player = temp
     exs.finalize(board)
     ohs.finalize(board)
+    return board.score
 
 
 def coords_to_index(x, y, z):
