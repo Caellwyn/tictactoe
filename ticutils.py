@@ -102,7 +102,7 @@ def init_wincon_matrix():
     col += 1
 
 
-class BaselinePlayer():
+class BaselinePlayer:
     def __init__(self):
         self.name = "Baseline"
 
@@ -114,7 +114,7 @@ class BaselinePlayer():
         pass
 
 
-class HumanPlayer():
+class HumanPlayer:
     def __init__(self, name="Human"):
         self.name = name
 
@@ -152,9 +152,9 @@ class HumanPlayer():
             assert False, "score is invalid"
 
 
-class AIPlayer():
+class AIPlayer:
 
-    def __init__(self, model, name="CPU", train = False, quiet = False):
+    def __init__(self, model, name="CPU", train=False, quiet=False):
         self.model = model
         self.train = train
         self.lastboard = None
@@ -167,6 +167,7 @@ class AIPlayer():
         self.last_illegal_move_count = None
         self.current_move_count = 0
         self.last_move_count = None
+        self.lastloss = None
 
     def print(self, *args, **kwargs):
         if not self.quiet:
@@ -176,10 +177,10 @@ class AIPlayer():
         self.current_move_count += 1
         legal_moves = set(board.legal_moves())
         if board.turn == 'Os':
-            current_board = np.concatenate([board.arr[27:],board.arr[:27]], axis=0)
-            current_board = current_board.reshape(1,54)
+            current_board = np.concatenate([board.arr[27:], board.arr[:27]], axis=0)
+            current_board = current_board.reshape(1, 54)
         else:
-            current_board = board.arr.reshape(1,54)
+            current_board = board.arr.reshape(1, 54)
 
         move_values = self.model.predict(current_board)
         current_move = np.argmax(move_values)
@@ -189,13 +190,13 @@ class AIPlayer():
             self.print(f"idiot tried to play{current_move}")
             current_move = random.choice(list(legal_moves))
             self.print(f"playing {current_move} instead")
-        #backprop
+        # backprop
         if self.lastboard is not None and self.train:
-            Y = np.full((1,27), 2.)
+            Y = np.full((1, 27), 2.)
             for move in range(27):
                 if move not in self.lastlegal:
                     Y[0, move] = -2
-            Y[0, self.lastmove] = move_values[0,current_move]
+            Y[0, self.lastmove] = move_values[0, current_move]
             history = self.model.fit(self.lastboard, Y, verbose=0 if self.quiet else 2)
             self.losses.append(history.history['loss'][0])
         self.lastboard = current_board.copy()
@@ -204,16 +205,15 @@ class AIPlayer():
         return current_move
 
     def finalize(self, board, is_x):
-        legal_moves = set(board.legal_moves())
         if self.train:
-            Y = np.full((1,27), 2.)
+            Y = np.full((1, 27), 2.)
             for move in range(27):
                 if move not in self.lastlegal:
                     Y[0, move] = -2
             Y[0, self.lastmove] = board.score * (-1 if not is_x else 1)
             history = self.model.fit(self.lastboard, Y, verbose=0 if self.quiet else 2)
             self.losses.append(history.history['loss'][0])
-            self.print(f"XXX average loss is {sum(self.losses)/len(self.losses)}")
+            self.print(f"XXX average loss is {sum(self.losses) / len(self.losses)}")
             self.lastloss = self.losses
 
         self.lastboard = None
@@ -225,10 +225,11 @@ class AIPlayer():
         self.last_move_count = self.current_move_count
         self.current_move_count = 0
 
-class Board():
+
+class Board:
 
     def __init__(self, player1, player2):
-        self.arr = np.zeros((54))
+        self.arr = np.zeros(54)
         self.score = None
         self.turn = 'Xs'
         self.player1 = player1
@@ -305,27 +306,28 @@ class Board():
             islegal = False
         return islegal
 
+
 def mikesfirstmodel():
     model = keras.Sequential([
 
         layers.Dense(16, activation='relu',
-                    #kernel_regularizer=tf.keras.regularizers.l1(0.01),
-                    #activity_regularizer=tf.keras.regularizers.l2(0.05)
-                    ),
+                     # kernel_regularizer=tf.keras.regularizers.l1(0.01),
+                     # activity_regularizer=tf.keras.regularizers.l2(0.05)
+                     ),
 
-        layers.Dense(27, activation = 'tanh')
-        ])
+        layers.Dense(27, activation='tanh')
+    ])
 
-    #Model Hyperparameters
+    # Model Hyperparameters
     optimizer = tf.keras.optimizers.Adam(learning_rate=.1)
     metrics = [tictacloss]
 
     loss = tictacloss
-    #loss = 'mean_squared_error'
-
+    # loss = 'mean_squared_error'
 
     model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
     return model
+
 
 def play_loop(exs, ohs):
     board = Board(exs.name, ohs.name)
@@ -341,38 +343,45 @@ def play_loop(exs, ohs):
     ohs.finalize(board, False)
     return board.score
 
-def training_loop(model,opponent=BaselinePlayer(), epochs = 1, alpha = .9):
-    ai = AIPlayer(model,quiet=True,train=True)
+
+def training_loop(model, opponents=[BaselinePlayer()], epochs=1, alpha=.9, round_robin=False):
+    ai = AIPlayer(model, quiet=True, train=True)
     isxs = True
     scores = []
     movelosses = []
     finallosses = []
     avgillegal = []
+    if not isinstance(opponents, list):
+        opponents = [opponents]
 
     for games in range(epochs):
         isxs = not isxs
-        if isxs:
-            score = play_loop(ai, opponent)
+        if round_robin:
+            foe = opponents[games % len(opponents)]
         else:
-            score = -play_loop(opponent, ai)
+            foe = random.choice(opponents)
+        if isxs:
+            score = play_loop(ai, foe)
+        else:
+            score = -play_loop(foe, ai)
         finallosses.append(ai.lastloss[-1])
-        movelosses.append(sum(ai.lastloss[:-1])/len(ai.lastloss[:-1]))
+        movelosses.append(sum(ai.lastloss[:-1]) / len(ai.lastloss[:-1]))
         scores.append(score)
-        avgillegal.append(ai.last_illegal_move_count/ai.last_move_count)
-        if games%10 == 0:
+        avgillegal.append(ai.last_illegal_move_count / ai.last_move_count)
+        if games % 10 == 0:
             print('This is game number: ', games)
 
     avgscores = [scores[0]]
 
     for i in range(1, len(scores)):
-        avgscores.append((avgscores[i-1]*alpha) + (scores[i]*(1-alpha)))
+        avgscores.append((avgscores[i - 1] * alpha) + (scores[i] * (1 - alpha)))
 
-    avgavgillegal= [avgillegal[0]]
+    avgavgillegal = [avgillegal[0]]
 
     for i in range(1, len(avgillegal)):
-        avgavgillegal.append((avgavgillegal[i-1]*alpha) + (avgillegal[i]*(1-alpha)))
+        avgavgillegal.append((avgavgillegal[i - 1] * alpha) + (avgillegal[i] * (1 - alpha)))
 
-    fig, (ax1,ax2,ax3, ax4) = plt.subplots(4,1)
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1)
     ax1.plot(avgscores)
     ax1.set_title('Final Scores')
     ax2.plot(movelosses)
@@ -381,11 +390,10 @@ def training_loop(model,opponent=BaselinePlayer(), epochs = 1, alpha = .9):
     ax3.set_title('Final losses')
     ax4.plot(avgavgillegal)
     ax4.set_title('average illegal moves per move')
-    #plt.legend(loc='lower right')
-    fig.set_size_inches(6,12)
+    # plt.legend(loc='lower right')
+    fig.set_size_inches(6, 12)
 
     plt.show()
-
 
 
 def coords_to_index(x, y, z):
@@ -407,6 +415,7 @@ def tictacloss(y_true, y_pred):
     squares = tf.where(y_true == 2, tf.zeros_like(squares), squares)
     return tf.reduce_sum(squares, axis=0)
 
+
 def tictacloss2(y_true, y_pred):
     illegal_moves = y_true == -2
     dont_cares = y_true == 2
@@ -414,6 +423,6 @@ def tictacloss2(y_true, y_pred):
     squares = tf.where(illegal_moves & (y_pred < -2.), tf.zeros_like(squares), squares)
 
     squares = tf.where(dont_cares & (tf.math.abs(y_pred) > 1), tf.math.abs(y_pred) - 1, squares)
-    squares = tf.where(dont_cares & (tf.math.abs(y_pred) <=1), tf.zeros_like(squares), squares)
+    squares = tf.where(dont_cares & (tf.math.abs(y_pred) <= 1), tf.zeros_like(squares), squares)
 
     return tf.reduce_sum(squares, axis=0)
