@@ -102,7 +102,7 @@ def init_wincon_matrix():
     col += 1
 
 
-class BaselinePlayer():
+class BaselinePlayer:
     def __init__(self):
         self.name = "Baseline"
 
@@ -114,7 +114,46 @@ class BaselinePlayer():
         pass
 
 
-class HumanPlayer():
+class SmartPlayer:
+    def __init__(self):
+        self.name = "Smart"
+
+    def get_move(self, board):
+        legal_moves = board.legal_moves()
+        if mat is None:
+            init_wincon_matrix()
+        if board.turn == 'Os':
+            current_board = np.concatenate([board.arr[27:], board.arr[:27]], axis=0)
+            current_board = current_board.reshape(1, 54)
+        else:
+            current_board = board.arr.reshape(1, 54)
+        my_progress = np.dot(current_board[:, :27], mat)
+        o_progress = np.dot(current_board[:, 27:], mat)
+
+        m_score = np.zeros((27,))
+        opponent_blocker = []
+        for m in legal_moves:
+            for c in range(mat.shape[1]):
+                if mat[m, c]:
+                    if my_progress[0, c] == 2 and o_progress[0, c] == 0:
+                        return m
+                    if my_progress[0, c] == 0 and o_progress[0, c] == 2:
+                        opponent_blocker.append(m)
+                    if my_progress[0, c] + o_progress[0, c] == 1:
+                        m_score[m] += 2
+                    if my_progress[0, c] + o_progress[0, c] == 0:
+                        m_score[m] += 1
+        if opponent_blocker:
+            return opponent_blocker[0]
+        if np.max(m_score) == 0:
+            return random.choice(legal_moves)
+        return random.choice(np.concatenate(np.argwhere(m_score == np.max(m_score))))
+
+    def finalize(self, board, is_x):
+        pass
+
+
+class HumanPlayer:
     def __init__(self, name="Human"):
         self.name = name
 
@@ -225,10 +264,11 @@ class AIPlayer:
         self.last_move_count = self.current_move_count
         self.current_move_count = 0
 
-class Board():
+
+class Board:
 
     def __init__(self, player1, player2):
-        self.arr = np.zeros((54))
+        self.arr = np.zeros(54)
         self.score = None
         self.turn = 'Xs'
         self.player1 = player1
@@ -305,27 +345,28 @@ class Board():
             islegal = False
         return islegal
 
+
 def mikesfirstmodel():
     model = keras.Sequential([
 
         layers.Dense(16, activation='relu',
-                    #kernel_regularizer=tf.keras.regularizers.l1(0.01),
-                    #activity_regularizer=tf.keras.regularizers.l2(0.05)
-                    ),
+                     # kernel_regularizer=tf.keras.regularizers.l1(0.01),
+                     # activity_regularizer=tf.keras.regularizers.l2(0.05)
+                     ),
 
         layers.Dense(27)
         ])
 
-    #Model Hyperparameters
+    # Model Hyperparameters
     optimizer = tf.keras.optimizers.Adam(learning_rate=.1)
     metrics = [tictacloss()]
 
     loss = tictacloss()
-    #loss = 'mean_squared_error'
-
+    # loss = 'mean_squared_error'
 
     model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
     return model
+
 
 def play_loop(exs, ohs):
     board = Board(exs.name, ohs.name)
@@ -400,7 +441,6 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9, round_ro
     finally:
         ai.quiet = cache_quiet
         ai.train = cache_train
-
 
 
 def coords_to_index(x, y, z):
