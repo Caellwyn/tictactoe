@@ -1,13 +1,12 @@
 import numpy as np
 import random
-import pandas as pd
 from IPython.display import display, clear_output
 import tensorflow as tf
 import keras
-from keras.callbacks import History
 from keras import layers
 import matplotlib.pyplot as plt
 import os
+import statistics as stat
 
 
 def best_of(moves):
