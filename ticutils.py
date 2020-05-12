@@ -159,12 +159,12 @@ class HumanPlayer:
         self.name = name
 
     def get_move(self, board):
-        clear_output()
         board.display()
         legal_moves = board.legal_moves()
         move = self.query_human()
         while move not in legal_moves:
             move = self.query_human(insult=True)
+        clear_output()
         return move
 
     def query_human(self, insult=False):
@@ -172,9 +172,16 @@ class HumanPlayer:
               'your move in that order, separated by a space')
         if insult:
             print('Try a LEGAL move, dipshit')
-        coords = input().split()
-        x, y, z = map(int, coords)
-        move = coords_to_index(x, y, z)
+        move = None
+        while move is None:
+            try:
+                coords = input().split()
+                x, y, z = map(int, coords)
+                move = coords_to_index(x, y, z)
+            except Exception:
+                print("Didn't understand you, try again. \nPlease "
+                      "input your answer like '0 2 1', \nbut, you know, "
+                      "without the quotes")
 
         return move
 
