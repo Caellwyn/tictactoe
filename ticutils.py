@@ -152,6 +152,18 @@ class SmartPlayer:
     def finalize(self, board, is_x):
         pass
 
+class SmartishPlayer(SmartPlayer):
+
+    def __init__(self, smarts = .5):
+        SmartPlayer.__init__(self)
+        self.smarts = smarts
+
+    def get_move(self, board):
+        if random.random() < self.smarts:
+            return SmartPlayer.get_move(self,board)
+        else:
+            legal_moves = board.legal_moves()
+            return random.choice(legal_moves)
 
 class HumanPlayer:
     def __init__(self, name="Human"):
