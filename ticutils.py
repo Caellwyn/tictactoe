@@ -7,6 +7,7 @@ import keras
 from keras.callbacks import History
 from keras import layers
 import matplotlib.pyplot as plt
+import os
 
 
 def best_of(moves):
@@ -190,18 +191,20 @@ class HumanPlayer:
         else:
             assert False, "score is invalid"
 
+
 class SmartishPlayer(SmartPlayer):
 
-    def __init__(self, smarts = .5):
+    def __init__(self, smarts=.5):
         SmartPlayer.__init__(self)
         self.smarts = smarts
 
     def get_move(self, board):
         if random.random() < self.smarts:
-            return SmartPlayer.get_move(self,board)
+            return SmartPlayer.get_move(self, board)
         else:
             legal_moves = board.legal_moves()
             return random.choice(legal_moves)
+
 
 class AIPlayer:
 
@@ -367,16 +370,15 @@ def mikesfirstmodel():
                      ),
 
         layers.Dense(27)
-        ])
+    ])
 
     # Model Hyperparameters
-    optimizer = tf.keras.optimizers.Adam(learning_rate=.1)
-    metrics = [tictacloss()]
+    optimizer = keras.optimizers.Adam(learning_rate=.1)
 
-    loss = tictacloss()
+    loss = TicTacLoss()
     # loss = 'mean_squared_error'
 
-    model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
+    model.compile(loss=loss, optimizer=optimizer)
     return model
 
 
@@ -394,26 +396,35 @@ def play_loop(exs, ohs):
     ohs.finalize(board, False)
     return board.score
 
-def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9, round_robin=False):
+
+def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
+                  round_robin=False, train=True,
+                  save_path=None, display_results=True,
+                  progress_frequency=10, save_frequency = 10000):
 
     cache_quiet = ai.quiet
     cache_train = ai.train
     ai.quiet = True
-    ai.train = True
+    ai.train = train
     try:
         isxs = True
         scores = []
         movelosses = []
         finallosses = []
         avgillegal = []
+        wingamelen = []
+        lossgamelen = []
+        checkpointpath = None
+
 
         if not isinstance(opponents, list):
             opponents = [opponents]
 
-        for games in range(epochs):
+        for game in range(epochs):
+
             isxs = not isxs
             if round_robin:
-                foe = opponents[games % len(opponents)]
+                foe = opponents[game % len(opponents)]
             else:
                 foe = random.choice(opponents)
             if isxs:
@@ -421,38 +432,89 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9, round_ro
             else:
                 score = -play_loop(foe, ai)
             finallosses.append(ai.lastloss[-1])
-            movelosses.append(sum(ai.lastloss[:-1]) / len(ai.lastloss[:-1]))
+            movelosses.append(stat.mean(ai.lastloss[:-1]))
             scores.append(score)
             avgillegal.append(ai.last_illegal_move_count / ai.last_move_count)
-            if games % 10 == 0:
-                print('This is game number: ', games)
+            if score == 1:
+                wingamelen.append(ai.last_move_count)
+            if score == -1:
+                lossgamelen.append(ai.last_move_count)
 
-        avgscores = [scores[0]]
+            if game % progress_frequency == 0:
+                print('This is game number: ', game)
 
-        for i in range(1, len(scores)):
-            avgscores.append((avgscores[i - 1] * alpha) + (scores[i] * (1 - alpha)))
+            if save_path:
+                if game % save_frequency == 0 or game == epochs-1:
 
-        avgavgillegal = [avgillegal[0]]
+                    tempcheckpointpath = f"{save_path}Epochs:{game}"
+                    ai.model.save(tempcheckpointpath)
+                    print(f"saving model to {tempcheckpointpath}")
+                    if checkpointpath is not None:
+                        os.remove(checkpointpath)
+                    checkpointpath = tempcheckpointpath
 
-        for i in range(1, len(avgillegal)):
-            avgavgillegal.append((avgavgillegal[i - 1] * alpha) + (avgillegal[i] * (1 - alpha)))
 
-        fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1)
-        ax1.plot(avgscores)
-        ax1.set_title('Final Scores')
-        ax2.plot(movelosses)
-        ax2.set_title('move losses')
-        ax3.plot(finallosses)
-        ax3.set_title('Final losses')
-        ax4.plot(avgavgillegal)
-        ax4.set_title('average illegal moves per move')
-        # plt.legend(loc='lower right')
-        fig.set_size_inches(6, 12)
 
-        plt.show()
+        avgscores = running_average(scores, alpha)
+        avgavgillegal = running_average(avgillegal, alpha)
+
+        # game len is not the total number of moves made, but just the number of moves taken by the ai.
+
+        avgwingamelen = running_average(wingamelen, alpha)
+        avglossgamelen = running_average(lossgamelen, alpha)
+
+        if display_results:
+
+            fig, axes = plt.subplots(3, 2)
+            ax1, ax2, ax3, ax4, ax5, ax6 = axes.reshape((6,))
+
+            ax1.plot(avgscores)
+            ax1.set_title('Final Scores')
+            ax2.plot(movelosses)
+            ax2.set_title('move losses')
+            ax3.plot(finallosses)
+            ax3.set_title('Final losses')
+            ax4.plot(avgavgillegal)
+            ax4.set_title('average illegal moves per move')
+            ax5.plot(avgwingamelen)
+            ax5.set_title('average length of games won')
+            ax6.plot(avglossgamelen)
+            ax6.set_title('average length of games lost')
+            fig.set_size_inches(12, 12)
+            plt.show()
+
+        if wingamelen:
+            meanwingamelen = stat.mean(wingamelen)
+        else:
+            meanwingamelen = 0
+
+        if lossgamelen:
+            meanlossgamelen = stat.mean(lossgamelen)
+        else:
+            meanlossgamelen = 0
+
+
+        stats = {"score": stat.mean(scores),
+            "move loss": stat.mean(movelosses),
+            "final loss": stat.mean(finallosses),
+            "avg illegal": stat.mean(avgillegal),
+            'win game length': meanwingamelen,
+            'loss game length': meanlossgamelen}
+
+        print('Training Complete')
+        return stats
+
+
     finally:
         ai.quiet = cache_quiet
         ai.train = cache_train
+
+
+def running_average(data, alpha):
+    runningaverage = [data[0]]
+    for i in range(1, len(data)):
+        runningaverage.append((runningaverage[i - 1] * alpha) + (data[i] * (1 - alpha)))
+    return runningaverage
 
 
 def coords_to_index(x, y, z):
@@ -467,11 +529,15 @@ def index_to_coords(i):
     return x, y, z
 
 
-def tictacloss(decay=1):
-    def tictacloss_with_decay(y_true, y_pred):
+class TicTacLoss:
+    def __init__(self, decay=1.):
+        self.decay = decay
+        self.__name__ = f"loss_decay_{decay}".replace('.', '')
+
+    def __call__(self, y_true, y_pred):
         illegal_moves = y_true == -2
         dont_cares = y_true == 2
-        y_pred = tf.where(tf.math.abs(y_pred) <= 1., decay * y_pred, y_pred)
+        y_pred = tf.where(tf.math.abs(y_pred) <= 1., self.decay * y_pred, y_pred)
         y_pred = tf.where(y_pred >= 3, y_pred - 4, y_pred)
 
         squares = (y_true - y_pred) ** 2
@@ -480,4 +546,17 @@ def tictacloss(decay=1):
         squares = tf.where(dont_cares & (tf.math.abs(y_pred) <= 1), tf.zeros_like(squares), squares)
 
         return tf.reduce_sum(squares, axis=0)
-    return tictacloss_with_decay
+
+    @staticmethod
+    def from_config(cfg):
+        return TicTacLoss(cfg["decay"])
+
+    def get_config(self):
+        # assert False
+        return {"decay": self.decay}
+
+
+def load_model(path):
+    with keras.utils.CustomObjectScope({"TicTacLoss": TicTacLoss}):
+        model = keras.models.load_model(path)
+        return model
