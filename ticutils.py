@@ -529,10 +529,13 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
 
 
 def running_average(data, alpha):
-    runningaverage = [data[0]]
-    for i in range(1, len(data)):
-        runningaverage.append((runningaverage[i - 1] * alpha) + (data[i] * (1 - alpha)))
-    return runningaverage
+    if data:
+        runningaverage = [data[0]]
+        for i in range(1, len(data)):
+            runningaverage.append((runningaverage[i - 1] * alpha) + (data[i] * (1 - alpha)))
+        return runningaverage
+    else:
+        return data
 
 
 def coords_to_index(x, y, z):
