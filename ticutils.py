@@ -500,10 +500,10 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
         stats = {}
         for i in range(2):
             turn = ["ohs", "exs"][i]
-            if wingamelen:
+            if wingamelen[i]:
                 meanwingamelen[i] = stat.mean(wingamelen[i])
 
-            if lossgamelen:
+            if lossgamelen[i]:
                 meanlossgamelen[i] = stat.mean(lossgamelen[i])
 
 
