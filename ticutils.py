@@ -115,8 +115,9 @@ class BaselinePlayer:
 
 
 class SmartPlayer():
-    def __init__(self, iq=1):
+    def __init__(self,iq=1):
         self.name = "Smart"
+        self.iq = iq
 
     def get_move(self, board):
         legal_moves = board.legal_moves()
@@ -150,30 +151,16 @@ class SmartPlayer():
         if np.max(m_score) == 0:
             return random.choice(legal_moves)
         for i in range(len(legal_moves-1)):
-            if random.random() > iq:
-                best_moves = np.argmax(m_score)
-                m_score[random.choice(best_moves)] = 0
+            if random.random() > self.iq:
+                best_move = random.choice(np.concatenate(np.argwhere(m_score == np.max(m_score))))
+                m_score[best_move] = 0
+                print("XXX BEST MOVE is")
+                print(best_move)
+            else:
+                break
         return random.choice(np.concatenate(np.argwhere(m_score == np.max(m_score))))
-
     def finalize(self, board, is_x):
         pass
-
-
-    def finalize(self, board, is_x):
-        pass
-
-class SmartishPlayer(SmartPlayer):
-
-    def __init__(self, smarts = .5):
-        SmartPlayer.__init__(self)
-        self.smarts = smarts
-
-    def get_move(self, board):
-        if random.random() < self.smarts:
-            return SmartPlayer.get_move(self,board)
-        else:
-            legal_moves = board.legal_moves()
-            return random.choice(legal_moves)
 
 class HumanPlayer:
     def __init__(self, name="Human"):
