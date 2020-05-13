@@ -114,8 +114,8 @@ class BaselinePlayer:
         pass
 
 
-class SmartPlayer:
-    def __init__(self):
+class SmartPlayer():
+    def __init__(self, iq=1):
         self.name = "Smart"
 
     def get_move(self, board):
@@ -129,25 +129,35 @@ class SmartPlayer:
             current_board = board.arr.reshape(1, 54)
         my_progress = np.dot(current_board[:, :27], mat)
         o_progress = np.dot(current_board[:, 27:], mat)
-
+        winning_moves = []
         m_score = np.zeros((27,))
         opponent_blocker = []
         for m in legal_moves:
             for c in range(mat.shape[1]):
                 if mat[m, c]:
                     if my_progress[0, c] == 2 and o_progress[0, c] == 0:
-                        return m
+                        winning_moves.append(m)
                     if my_progress[0, c] == 0 and o_progress[0, c] == 2:
                         opponent_blocker.append(m)
                     if my_progress[0, c] + o_progress[0, c] == 1:
                         m_score[m] += 2
                     if my_progress[0, c] + o_progress[0, c] == 0:
                         m_score[m] += 1
+        if winning_moves:
+            return random.choice(winning_moves)
         if opponent_blocker:
-            return opponent_blocker[0]
+            return random.choice(opponent_blocker)
         if np.max(m_score) == 0:
             return random.choice(legal_moves)
+        for i in range(len(legal_moves-1)):
+            if random.random() > iq:
+                best_moves = np.argmax(m_score)
+                m_score[random.choice(best_moves)] = 0
         return random.choice(np.concatenate(np.argwhere(m_score == np.max(m_score))))
+
+    def finalize(self, board, is_x):
+        pass
+
 
     def finalize(self, board, is_x):
         pass
@@ -210,23 +220,10 @@ class HumanPlayer:
             assert False, "score is invalid"
 
 
-class SmartishPlayer(SmartPlayer):
-
-    def __init__(self, smarts=.5):
-        SmartPlayer.__init__(self)
-        self.smarts = smarts
-
-    def get_move(self, board):
-        if random.random() < self.smarts:
-            return SmartPlayer.get_move(self, board)
-        else:
-            legal_moves = board.legal_moves()
-            return random.choice(legal_moves)
-
 
 class AIPlayer:
 
-    def __init__(self, model, name="CPU", train=False, quiet=False):
+    def __init__(self, model, name="CPU", train=False, quiet=False, exploration = 0):
         self.model = model
         self.train = train
         self.lastboard = None
@@ -240,6 +237,7 @@ class AIPlayer:
         self.current_move_count = 0
         self.last_move_count = None
         self.lastloss = None
+        self.exploration = exploration
 
     def print(self, *args, **kwargs):
         if not self.quiet:
@@ -256,12 +254,19 @@ class AIPlayer:
 
         move_values = self.model.predict(current_board)
         current_move = np.argmax(move_values)
+        proposed_move = current_move
 
-        if current_move not in legal_moves:
-            self.current_illegal_move_count += 1
-            self.print(f"idiot tried to play{current_move}")
+        # Returns random move if exploring, or if an illegal move was proposed.
+        exploring = random.random() < self.exploration
+        if current_move not in legal_moves or exploring:
             current_move = random.choice(list(legal_moves))
-            self.print(f"playing {current_move} instead")
+            if exploring:
+                self.print(f"Exploring:")
+            else:
+                self.print(f"idiot tried to play {current_move} illegally:")
+                self.current_illegal_move_count += 1
+            self.print(f"playing {current_move} instead {proposed_move}")
+
         # backprop
         if self.lastboard is not None and self.train:
             Y = np.full((1, 27), 2.)
@@ -296,6 +301,7 @@ class AIPlayer:
         self.current_illegal_move_count = 0
         self.last_move_count = self.current_move_count
         self.current_move_count = 0
+
 
 
 class Board:
