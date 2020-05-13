@@ -426,12 +426,12 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
     ai.train = train
     try:
         isxs = True
-        scores = []
-        movelosses = []
-        finallosses = []
-        avgillegal = []
-        wingamelen = []
-        lossgamelen = []
+        scores = ([], [])
+        movelosses = ([], [])
+        finallosses = ([], [])
+        avgillegal = ([], [])
+        wingamelen = ([], [])
+        lossgamelen = ([], [])
         checkpointpath = None
 
 
@@ -449,14 +449,14 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
                 score = play_loop(ai, foe)
             else:
                 score = -play_loop(foe, ai)
-            finallosses.append(ai.lastloss[-1])
-            movelosses.append(stat.mean(ai.lastloss[:-1]))
-            scores.append(score)
-            avgillegal.append(ai.last_illegal_move_count / ai.last_move_count)
+            finallosses[int(isxs)].append(ai.lastloss[-1])
+            movelosses[int(isxs)].append(stat.mean(ai.lastloss[:-1]))
+            scores[int(isxs)].append(score)
+            avgillegal[int(isxs)].append(ai.last_illegal_move_count / ai.last_move_count)
             if score == 1:
-                wingamelen.append(ai.last_move_count)
+                wingamelen[int(isxs)].append(ai.last_move_count)
             if score == -1:
-                lossgamelen.append(ai.last_move_count)
+                lossgamelen[int(isxs)].append(ai.last_move_count)
 
             if game % progress_frequency == 0:
                 print('This is game number: ', game)
@@ -480,44 +480,48 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
 
         avgwingamelen = running_average(wingamelen, alpha)
         avglossgamelen = running_average(lossgamelen, alpha)
-
+        # XXX NEED TO FIX PLOTTING AND STATS
         if display_results:
 
-            fig, axes = plt.subplots(3, 2)
-            ax1, ax2, ax3, ax4, ax5, ax6 = axes.reshape((6,))
+            fig, axes = plt.subplots(6, 2)
+            row1, row2, row3, row4, row5, row6 = axes
+            for i in range(2):
+                turn = ["ohs", "exs"][i]
 
-            ax1.plot(avgscores)
-            ax1.set_title('Final Scores')
-            ax2.plot(movelosses)
-            ax2.set_title('move losses')
-            ax3.plot(finallosses)
-            ax3.set_title('Final losses')
-            ax4.plot(avgavgillegal)
-            ax4.set_title('average illegal moves per move')
-            ax5.plot(avgwingamelen)
-            ax5.set_title('average length of games won')
-            ax6.plot(avglossgamelen)
-            ax6.set_title('average length of games lost')
-            fig.set_size_inches(12, 12)
+                row1[i].plot(avgscores[i])
+                row1[i].set_title('Final Scores for ' + turn)
+                row2[i].plot(movelosses[i])
+                row2[i].set_title('move losses for ' + turn)
+                row3[i].plot(finallosses[i])
+                row3[i].set_title('Final losses for ' + turn)
+                row4[i].plot(avgavgillegal[i])
+                row4[i].set_title('average illegal moves per move for ' + turn)
+                row5[i].plot(avgwingamelen[i])
+                row5[i].set_title('average length of games won for ' + turn)
+                row6[i].plot(avglossgamelen[i])
+                row6[i].set_title('average length of games lost for ' + turn)
+            fig.set_size_inches(12, 20)
             plt.show()
 
-        if wingamelen:
-            meanwingamelen = stat.mean(wingamelen)
-        else:
-            meanwingamelen = 0
+        meanwingamelen = [0, 0]
+        meanlossgamelen = [0, 0]
+        stats = {}
+        for i in range(2):
+            turn = ["ohs", "exs"][i]
+            if wingamelen:
+                meanwingamelen[i] = stat.mean(wingamelen[i])
 
-        if lossgamelen:
-            meanlossgamelen = stat.mean(lossgamelen)
-        else:
-            meanlossgamelen = 0
+            if lossgamelen:
+                meanlossgamelen[i] = stat.mean(lossgamelen[i])
 
 
-        stats = {"score": stat.mean(scores),
-            "move loss": stat.mean(movelosses),
-            "final loss": stat.mean(finallosses),
-            "avg illegal": stat.mean(avgillegal),
-            'win game length': meanwingamelen,
-            'loss game length': meanlossgamelen}
+
+            stats["score for "+turn] = stat.mean(scores[i])
+            stats["move loss for "+turn] = stat.mean(movelosses[i])
+            stats["final loss for "+turn] = stat.mean(finallosses[i])
+            stats["avg illegal for "+turn] = stat.mean(avgillegal[i])
+            stats["win game length for "+turn] = meanwingamelen[i]
+            stats["loss game length for "+turn] = meanlossgamelen[i]
 
         print('Training Complete')
         return stats
@@ -529,13 +533,13 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
 
 
 def running_average(data, alpha):
-    if data:
-        runningaverage = [data[0]]
-        for i in range(1, len(data)):
-            runningaverage.append((runningaverage[i - 1] * alpha) + (data[i] * (1 - alpha)))
-        return runningaverage
-    else:
-        return data
+    ret = ([], [])
+    for i in range(2):
+        if data[i]:
+            ret[i].append(data[i][0])
+            for j in range(1, len(data[i])):
+                ret[i].append((ret[i][j - 1] * alpha) + (data[i][j] * (1 - alpha)))
+    return ret
 
 
 def coords_to_index(x, y, z):
