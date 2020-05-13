@@ -154,8 +154,7 @@ class SmartPlayer():
             if random.random() > self.iq:
                 best_move = random.choice(np.concatenate(np.argwhere(m_score == np.max(m_score))))
                 m_score[best_move] = 0
-                print("XXX BEST MOVE is")
-                print(best_move)
+
             else:
                 break
         return random.choice(np.concatenate(np.argwhere(m_score == np.max(m_score))))
