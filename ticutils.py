@@ -116,7 +116,7 @@ class BaselinePlayer:
 
 class SmartPlayer():
     def __init__(self,iq=1):
-        self.name = "SmartPlayer: iq " + iq
+        self.name = "SmartPlayer: iq " + str(iq)
         self.iq = iq
 
     def get_move(self, board):
