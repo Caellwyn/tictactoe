@@ -116,7 +116,7 @@ class BaselinePlayer:
 
 class SmartPlayer():
     def __init__(self,iq=1):
-        self.name = "Smart"
+        self.name = "SmartPlayer: iq " + iq
         self.iq = iq
 
     def get_move(self, board):
@@ -423,9 +423,9 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
                   save_path=None, display_results=True,
                   progress_frequency=10, save_frequency = 10000):
 
-    cache_quiet = ai.verbose
+    cache_verbose = ai.verbose
     cache_train = ai.train
-    ai.verbose = 1
+    ai.verbose = 0
     ai.train = train
     try:
         isxs = True
@@ -531,7 +531,7 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
 
 
     finally:
-        ai.quiet = cache_quiet
+        ai.verbose = cache_verbose
         ai.train = cache_train
 
 
