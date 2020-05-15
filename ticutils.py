@@ -209,7 +209,7 @@ class HumanPlayer:
 
 class AIPlayer:
 
-    def __init__(self, model, name="CPU", train=False, quiet=False, exploration = 0):
+    def __init__(self, model, name="CPU", train=False, verbose=1, exploration = 0):
         self.model = model
         self.train = train
         self.lastboard = None
@@ -217,16 +217,22 @@ class AIPlayer:
         self.lastlegal = None
         self.name = name
         self.losses = []
-        self.quiet = quiet
+        self.verbose = verbose
         self.current_illegal_move_count = 0
         self.last_illegal_move_count = None
         self.current_move_count = 0
         self.last_move_count = None
         self.lastloss = None
         self.exploration = exploration
+        self.last_move_values = None
 
     def print(self, *args, **kwargs):
-        if not self.quiet:
+        if "level" in kwargs:
+            level = kwargs["level"]
+            del kwargs["level"]
+        else:
+            level = 1
+        if self.verbose >= level:
             print(*args, **kwargs)
 
     def get_move(self, board):
@@ -260,11 +266,13 @@ class AIPlayer:
                 if move not in self.lastlegal:
                     Y[0, move] = -2
             Y[0, self.lastmove] = move_values[0, current_move]
-            history = self.model.fit(self.lastboard, Y, verbose=0 if self.quiet else 2)
+            self.print(f"XXX X is {self.lastboard}\n Yhat is {self.last_move_values}, \nY is {Y}", level=2)
+            history = self.model.fit(self.lastboard, Y, verbose=self.verbose)
             self.losses.append(history.history['loss'][0])
         self.lastboard = current_board.copy()
         self.lastmove = current_move
         self.lastlegal = legal_moves
+        self.last_move_values = move_values
         return current_move
 
     def finalize(self, board, is_x):
@@ -274,7 +282,8 @@ class AIPlayer:
                 if move not in self.lastlegal:
                     Y[0, move] = -2
             Y[0, self.lastmove] = board.score * (-1 if not is_x else 1) + 4
-            history = self.model.fit(self.lastboard, Y, verbose=0 if self.quiet else 2)
+            self.print(f"XXX Final X is {self.lastboard}\n Yhat is {self.last_move_values}, \nY is {Y}", level=2)
+            history = self.model.fit(self.lastboard, Y, verbose=self.verbose)
             self.losses.append(history.history['loss'][0])
             self.print(f"XXX average loss is {sum(self.losses) / len(self.losses)}")
             self.lastloss = self.losses
@@ -287,6 +296,8 @@ class AIPlayer:
         self.current_illegal_move_count = 0
         self.last_move_count = self.current_move_count
         self.current_move_count = 0
+        # Set back to initial conditions?
+        # self.last_move_values = None
 
 
 
@@ -554,8 +565,8 @@ class TicTacLoss:
     def __call__(self, y_true, y_pred):
         illegal_moves = y_true == -2
         dont_cares = y_true == 2
-        y_pred = tf.where(tf.math.abs(y_pred) <= 1., self.decay * y_pred, y_pred)
-        y_pred = tf.where(y_pred >= 3, y_pred - 4, y_pred)
+        y_true = tf.where(tf.math.abs(y_true) <= 1., self.decay * y_true, y_true)
+        y_true = tf.where(y_true >= 3, y_true - 4, y_true)
 
         squares = (y_true - y_pred) ** 2
         squares = tf.where(illegal_moves & (y_pred < -2.), tf.zeros_like(squares), squares)
