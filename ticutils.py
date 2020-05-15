@@ -425,7 +425,7 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
 
     cache_quiet = ai.quiet
     cache_train = ai.train
-    ai.quiet = True
+    ai.verbose = 1
     ai.train = train
     try:
         isxs = True
