@@ -423,7 +423,7 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
                   save_path=None, display_results=True,
                   progress_frequency=10, save_frequency = 10000):
 
-    cache_quiet = ai.quiet
+    cache_quiet = ai.verbose
     cache_train = ai.train
     ai.verbose = 1
     ai.train = train
