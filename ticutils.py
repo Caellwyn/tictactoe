@@ -7,6 +7,9 @@ from keras import layers
 import matplotlib.pyplot as plt
 import os
 import statistics as stat
+import pandas as pd
+from google.colab import drive
+
 
 
 def best_of(moves):
@@ -222,9 +225,11 @@ class AIPlayer:
         self.last_illegal_move_count = None
         self.current_move_count = 0
         self.last_move_count = None
-        self.lastloss = None
+        self.lastloss = [0,0]
         self.exploration = exploration
         self.last_move_values = None
+        self.model.opponent_history = []
+
 
     def print(self, *args, **kwargs):
         if "level" in kwargs:
@@ -260,20 +265,27 @@ class AIPlayer:
             self.print(f"playing {current_move} instead {proposed_move}")
 
         # backprop
-        if self.lastboard is not None and self.train:
+        if self.lastboard is not None:
             Y = np.full((1, 27), 2.)
             for move in range(27):
                 if move not in self.lastlegal:
                     Y[0, move] = -2
             Y[0, self.lastmove] = move_values[0, current_move]
             self.print(f"XXX X is {self.lastboard}\n Yhat is {self.last_move_values}, \nY is {Y}", level=2)
-            history = self.model.fit(self.lastboard, Y, verbose=self.verbose)
-            self.losses.append(history.history['loss'][0])
+            if self.train:
+                history = self.model.fit(self.lastboard, Y, verbose=self.verbose)
+                self.losses.append(history.history['loss'][0])
+
+            else:
+                loss1 = self.model.evaluate(self.lastboard, Y, verbose=self.verbose)
+                self.losses.append(loss1)
         self.lastboard = current_board.copy()
         self.lastmove = current_move
         self.lastlegal = legal_moves
         self.last_move_values = move_values
+
         return current_move
+
 
     def finalize(self, board, is_x):
         if self.train:
@@ -298,7 +310,6 @@ class AIPlayer:
         self.current_move_count = 0
         # Set back to initial conditions?
         # self.last_move_values = None
-
 
 
 class Board:
@@ -422,11 +433,12 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
                   round_robin=False, train=True,
                   save_path=None, display_results=True,
                   progress_frequency=10, save_frequency = 10000):
-
     cache_verbose = ai.verbose
     cache_train = ai.train
-    ai.verbose = 0
     ai.train = train
+    ai.verbose = 0
+    opponentnames = [opponent.name for opponent in opponents]
+    ai.model.opponent_history.append((opponentnames,epochs))
     try:
         isxs = True
         scores = ([], [])
@@ -533,6 +545,24 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
     finally:
         ai.verbose = cache_verbose
         ai.train = cache_train
+
+def eval_loop(model,verbose=0,save=True):
+    drive.mount('/gdrive')
+    %cd /gdrive/My Drive/Colab Notebooks/tic tac toe
+    df = pd.read_csv('Experiment Dataframe.csv', index_col='model_name')
+    if model.name in df.index:
+        return 'A model with this name already exists in the Experimental Database.'
+        'Please choose a new name for your model'
+    ai = AIPlayer(model, train=False, verbose=verbose)
+    stats = training_loop(ai,[SmartPlayer(.9)],train=False, epochs=100)
+    data = pd.DataFrame({'model_name':[model.name],
+                    'model_summary':[model.get_config()],
+                    'optimizer':[model.optimizer.get_config()],
+                    'opponent_history':[model.opponent_history],
+                    'eval_stats':[stats]}).set_index('model_name')
+    df = df.append(data, verify_integrity=True,)
+    df.to_csv('Experiment Dataframe.csv')
+    print('saving results to: /gdrive/My Drive/Colab Notebooks/tic tac toe/Experiment Dataframe.csv')
 
 
 def running_average(data, alpha):
