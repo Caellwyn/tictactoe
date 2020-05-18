@@ -632,60 +632,55 @@ def load_model(path):
 
 class TicRows(layers.Layer):
 
-    def __init__(self, channels):
+    def __init__(self, channels, board_edge=3, connection_mat = None):
         super(TicRows, self).__init__()
 
         self.channels = channels
+        self.board_edge = board_edge
+        if connection_mat is None:
+            if mats is None:
+                init_wincon_matrix()
+            connection_mat = mats
+        self.connection_mat = connection_mat
 
     def build(self, input_shape):
-        if mat is None or mats is None:
-            init_wincon_matrix()
-        assert input_shape[-1] % 27 == 0
-        input_channels = input_shape[-1] // 27
-        dup_mat_virt = np.concatenate((mat,) * input_channels, axis=0)
-        dup_mat = np.concatenate((dup_mat_virt,) * self.channels, axis=1)
-        # This has wasted params
-        # self.w = tf.where(dup_mat, self.add_weight(shape=dup_mat.shape,
-        #                       initializer='random_normal',
-        #                       trainable=True), tf.zeros(shape=dup_mat.shape))
+        board_size = self.board_edge**3
+        row_count = 3 * (self.board_edge + 1)**2 + 1
+        if input_shape[-1] % board_size != 0:
+            raise ValueError(f"input shape should a multiple of "
+                f"{board_size}, but instead is {input_shape[-1]}")
+        input_channels = input_shape[-1] // board_size
 
-        # XXX this was too slow
-        # self.w = tf.map_fn(
-        #    lambda a:tf.map_fn(
-        #        lambda b: tf.cond(b==1,
-        #            lambda:self.add_weight(initializer='random_normal', trainable=True, dtype="float32"),
-        #            lambda:tf.constant(0, dtype="float32")), a, dtype="float32"), dup_mat, dtype="float32")
-
-        self.v = self.add_weight(shape=(3, input_channels, 49, self.channels),
+        self.v = self.add_weight(shape=(self.board_edge, input_channels, row_count, self.channels),
                                  initializer='random_normal',
                                  trainable=True)
 
-        self.b = self.add_weight(shape=(dup_mat.shape[1],),
+        self.b = self.add_weight(shape=(self.channels * row_count,),
                                  initializer='random_normal',
                                  trainable=True)
 
     def call(self, inputs):
-        # mats is (board,  rowlen, rows)
-        # v is (rowlen,  input_channels, rows,  output_channels, )
+        # mats is (board, rowlen, rows)
+        # v is (rowlen, input_channels, rows,  output_channels, )
         # mats is elemnent wise multiplied by v, with v broacasted across board, and mats broatcasted by input_channels and output channels.
         # input is  (batchsize, input channels* board)
-        input_channels = inputs.shape[-1] // 27
-        v_reshaped = tf.reshape(self.v, (1, 3, input_channels, 49, self.channels))
-        v_broadcasted = tf.broadcast_to(v_reshaped, (27, 3, input_channels, 49, self.channels))
-        mats_reshaped = tf.reshape(mats, (27, 3, 1, 49, 1))
-        mats_broadasted = tf.broadcast_to(mats_reshaped, (27, 3, input_channels, 49, self.channels))
+        row_count = 3 * (self.board_edge + 1)**2 + 1
+
+        board_size = self.board_edge**3
+        input_channels = inputs.shape[-1] // board_size
+        v_reshaped = tf.reshape(self.v, (1, self.board_edge, input_channels, row_count, self.channels))
+        v_broadcasted = tf.broadcast_to(v_reshaped, (board_size, self.board_edge, input_channels, row_count, self.channels))
+        mats_reshaped = tf.reshape(self.connection_mat, (board_size, self.board_edge, 1, row_count, 1))
+        mats_broadasted = tf.broadcast_to(mats_reshaped, (board_size, self.board_edge, input_channels, row_count, self.channels))
         w_unsummed_unshaped = tf.cast(mats_broadasted, "float32") * v_broadcasted
         w_summed_unshaped = tf.math.reduce_sum(w_unsummed_unshaped, axis=1)
-        w = tf.reshape(w_summed_unshaped, (input_channels * 27, self.channels * 49))
-        # return is (batchsize, rows, output_channels)
+        w = tf.reshape(w_summed_unshaped, (input_channels * board_size, self.channels * row_count))
+        # return is (batchsize, rows * output_channels)
         return tf.matmul(inputs, w) + self.b
 
-    # def call(self, inputs):
-    # w is (board*input_channels, rows*output_channels)
-    #    return tf.matmul(inputs, self.w) + self.b
-
     def compute_output_shape(self, input_shape):
-        return (input_shape[0], 49 * self.channels)
+        row_count = 3 * (self.board_edge + 1)**2 + 1
+        return (input_shape[0], row_count * self.channels)
 
     def get_config(self):
-        return {"channels": self.channels}
+        return {"channels": self.channels, "board_edge":self.board_edge, "connection_mat":None}
