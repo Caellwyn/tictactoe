@@ -632,7 +632,8 @@ def load_model(path):
 
 class TicRows(layers.Layer):
 
-    def __init__(self, channels, board_edge=3, connection_mat = None):
+    def __init__(self, channels, board_edge=3, connection_mat = None,
+                 rows_share_weights = False):
         super(TicRows, self).__init__()
 
         self.channels = channels
@@ -642,6 +643,7 @@ class TicRows(layers.Layer):
                 init_wincon_matrix()
             connection_mat = mats
         self.connection_mat = connection_mat
+        self.rows_share_weights = rows_share_weights
 
     def build(self, input_shape):
         board_size = self.board_edge**3
@@ -651,13 +653,19 @@ class TicRows(layers.Layer):
                 f"{board_size}, but instead is {input_shape[-1]}")
         input_channels = input_shape[-1] // board_size
 
-        self.v = self.add_weight(shape=(self.board_edge, input_channels, row_count, self.channels),
+        if self.rows_share_weights:
+            num_row_weights = 1
+        else:
+            num_row_weights = row_count
+        self.v = self.add_weight(shape=(self.board_edge, input_channels,
+                                        num_row_weights, self.channels),
                                  initializer='random_normal',
                                  trainable=True)
 
-        self.b = self.add_weight(shape=(self.channels * row_count,),
+        self.b = tf.repeat(self.add_weight(shape=(self.channels * num_row_weights,),
                                  initializer='random_normal',
-                                 trainable=True)
+                                 trainable=True), row_count//num_row_weights,
+                           axis = 0)
 
     def call(self, inputs):
         # mats is (board, rowlen, rows)
@@ -668,7 +676,11 @@ class TicRows(layers.Layer):
 
         board_size = self.board_edge**3
         input_channels = inputs.shape[-1] // board_size
-        v_reshaped = tf.reshape(self.v, (1, self.board_edge, input_channels, row_count, self.channels))
+        if self.rows_share_weights:
+            num_row_weights = 1
+        else:
+            num_row_weights = row_count
+        v_reshaped = tf.reshape(self.v, (1, self.board_edge, input_channels, num_row_weights, self.channels))
         v_broadcasted = tf.broadcast_to(v_reshaped, (board_size, self.board_edge, input_channels, row_count, self.channels))
         mats_reshaped = tf.reshape(self.connection_mat, (board_size, self.board_edge, 1, row_count, 1))
         mats_broadasted = tf.broadcast_to(mats_reshaped, (board_size, self.board_edge, input_channels, row_count, self.channels))
