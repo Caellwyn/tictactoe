@@ -284,7 +284,7 @@ class AIPlayer:
                 history = self.model.fit(self.lastboard, Y, verbose=self.verbose)
                 self.losses.append(history.history['loss'][0])
 
-            else:
+            elif self.model.optimizer is not None:
                 loss1 = self.model.evaluate(self.lastboard, Y, verbose=self.verbose)
                 self.losses.append(loss1)
         self.lastboard = current_board.copy()
