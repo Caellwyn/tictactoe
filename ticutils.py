@@ -9,7 +9,7 @@ import os
 import statistics as stat
 import pandas as pd
 from google.colab import drive
-DRIVEPATH = '/gdrive/My Drive/Colab Notebooks/tic tac toe'
+DRIVEPATH = '/gdrive/My Drive/Colab Notebooks/tic tac toe/'
 
 
 def best_of(moves):
@@ -555,12 +555,13 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
         ai.train = cache_train
 
 def eval_loop(model,verbose=0,save=True):
-    drive.mount('/gdrive')
-    savepath = DRIVEPATH + 'Experiment Dataframe.csv'
-    df = pd.read_csv(savepath, index_col='model_name')
-    if model.name in df.index:
-        return 'A model with this name already exists in the Experimental Database.'
-        'Please choose a new name for your model'
+    if save:
+        drive.mount('/gdrive')
+        savepath = DRIVEPATH + 'Experiment Dataframe.csv'
+        df = pd.read_csv(savepath, index_col='model_name')
+        if model.name in df.index:
+            raise ValueError('model with this name already exists in the Experimental Database.'
+            'Please choose a new name for your model')
     ai = AIPlayer(model, train=False, verbose=verbose)
     stats = training_loop(ai,[SmartPlayer(.9)],train=False, epochs=1000)
     data = pd.DataFrame({'model_name':[model.name],
@@ -568,9 +569,11 @@ def eval_loop(model,verbose=0,save=True):
                     'optimizer':[model.optimizer.get_config()],
                     'opponent_history':[model.opponent_history],
                     'eval_stats':[stats]}).set_index('model_name')
-    df = df.append(data, verify_integrity=True,)
-    df.to_csv('Experiment Dataframe.csv')
-    print('saving results to: ' + savepath)
+    if save:
+        df = df.append(data, verify_integrity=True,)
+        df.to_csv(savepath)
+        print('saving results to: ' + savepath)
+    return data
 
 def running_average(data, alpha):
     ret = ([], [])
