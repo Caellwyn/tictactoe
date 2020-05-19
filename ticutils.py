@@ -631,13 +631,17 @@ def load_model(path):
 
 
 class TicRows(layers.Layer):
-
     def __init__(self, channels, board_edge=3, connection_mat = None,
                  rows_share_weights = False):
         super(TicRows, self).__init__()
 
-        self.channels = channels
+        # board_channels is calculated at build time
+        self.board_channels = None
+        self.rows_channels = channels
         self.board_edge = board_edge
+        self.board_size = board_edge**3
+        self.row_count =  3 * (self.board_edge + 1)**2 + 1
+
         if connection_mat is None:
             if mats is None:
                 init_wincon_matrix()
@@ -645,54 +649,81 @@ class TicRows(layers.Layer):
         self.connection_mat = connection_mat
         self.rows_share_weights = rows_share_weights
 
-    def build(self, input_shape):
-        board_size = self.board_edge**3
-        row_count = 3 * (self.board_edge + 1)**2 + 1
-        if input_shape[-1] % board_size != 0:
+    def init_channel(self, input_shape):
+        if input_shape[-1] % self.board_size != 0:
             raise ValueError(f"input shape should a multiple of "
-                f"{board_size}, but instead is {input_shape[-1]}")
-        input_channels = input_shape[-1] // board_size
+                f"{self.board_size}, but instead is {input_shape[-1]}")
+        self.board_channels = input_shape[-1] // self.board_size
+
+    def build(self, input_shape):
+        self.init_channel(input_shape)
 
         if self.rows_share_weights:
             num_row_weights = 1
         else:
-            num_row_weights = row_count
-        self.v = self.add_weight(shape=(self.board_edge, input_channels,
-                                        num_row_weights, self.channels),
+            num_row_weights = self.row_count
+        self.v = self.add_weight(shape=(self.board_edge, self.board_channels,
+                                        num_row_weights, self.rows_channels ),
                                  initializer='random_normal',
                                  trainable=True)
 
-        self.b = tf.repeat(self.add_weight(shape=(self.channels * num_row_weights,),
-                                 initializer='random_normal',
-                                 trainable=True), row_count//num_row_weights,
-                           axis = 0)
+        self.set_b()
 
-    def call(self, inputs):
-        # mats is (board, rowlen, rows)
-        # v is (rowlen, input_channels, rows,  output_channels, )
-        # mats is elemnent wise multiplied by v, with v broacasted across board, and mats broatcasted by input_channels and output channels.
-        # input is  (batchsize, input channels* board)
-        row_count = 3 * (self.board_edge + 1)**2 + 1
-
-        board_size = self.board_edge**3
-        input_channels = inputs.shape[-1] // board_size
+    def set_b(self):
         if self.rows_share_weights:
             num_row_weights = 1
         else:
-            num_row_weights = row_count
-        v_reshaped = tf.reshape(self.v, (1, self.board_edge, input_channels, num_row_weights, self.channels))
-        v_broadcasted = tf.broadcast_to(v_reshaped, (board_size, self.board_edge, input_channels, row_count, self.channels))
-        mats_reshaped = tf.reshape(self.connection_mat, (board_size, self.board_edge, 1, row_count, 1))
-        mats_broadasted = tf.broadcast_to(mats_reshaped, (board_size, self.board_edge, input_channels, row_count, self.channels))
-        w_unsummed_unshaped = tf.cast(mats_broadasted, "float32") * v_broadcasted
-        w_summed_unshaped = tf.math.reduce_sum(w_unsummed_unshaped, axis=1)
-        w = tf.reshape(w_summed_unshaped, (input_channels * board_size, self.channels * row_count))
-        # return is (batchsize, rows * output_channels)
-        return tf.matmul(inputs, w) + self.b
+            num_row_weights = self.row_count
+        self.b = tf.repeat(self.add_weight(shape=(self.rows_channels  * num_row_weights,),
+                                 initializer='random_normal',
+                                 trainable=True), self.row_count//num_row_weights,
+                           axis = 0)
+
+    def call(self, inputs):
+        return tf.matmul(inputs, self.get_w()) + self.b
 
     def compute_output_shape(self, input_shape):
-        row_count = 3 * (self.board_edge + 1)**2 + 1
-        return (input_shape[0], row_count * self.channels)
+        return (input_shape[0], self.row_count * self.rows_channels)
 
     def get_config(self):
-        return {"channels": self.channels, "board_edge":self.board_edge, "connection_mat":None}
+        return {"channels": self.rows_channels , "board_edge":self.board_edge, "connection_mat":None}
+
+    def get_w(self):
+
+        if self.rows_share_weights:
+            num_row_weights = 1
+        else:
+            num_row_weights = self.row_count
+        v_reshaped = tf.reshape(self.v, (1, self.board_edge, self.board_channels, num_row_weights, self.rows_channels ))
+        v_broadcasted = tf.broadcast_to(v_reshaped, (self.board_size, self.board_edge, self.board_channels, self.row_count, self.rows_channels ))
+        mats_reshaped = tf.reshape(self.connection_mat, (self.board_size, self.board_edge, 1, self.row_count, 1))
+        mats_broadcasted = tf.broadcast_to(mats_reshaped, (self.board_size, self.board_edge, self.board_channels, self.row_count, self.rows_channels ))
+        w_unsummed_unshaped = tf.cast(mats_broadcasted, "float32") * v_broadcasted
+        w_summed_unshaped = tf.math.reduce_sum(w_unsummed_unshaped, axis=1)
+        w = tf.reshape(w_summed_unshaped, (self.board_channels * self.board_size, self.rows_channels * self.row_count))
+        return w
+
+class TacRows(TicRows):
+    def __init__(self, channels, board_edge=3, connection_mat = None,
+           rows_share_weights = False):
+        super(TacRows, self).__init__(channels=channels, board_edge=board_edge,connection_mat=connection_mat)
+
+        self.board_channels = channels
+        self.rows_channels = None
+
+    def init_channel(self, input_shape):
+        if input_shape[-1] % self.row_count != 0:
+            raise ValueError(f"input shape should a multiple of "
+                f"{self.row_count}, but instead is {input_shape[-1]}")
+        self.rows_channels = input_shape[-1] // self.row_count
+
+    def call(self,inputs):
+        return tf.matmul(inputs, self.get_w(), transpose_b=True) + self.b
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], self.board_size * self.board_channels)
+
+    def set_b(self):
+        self.b = self.add_weight(shape=(self.board_channels *self.board_size,),
+                                 initializer='random_normal',
+                                 trainable=True)
