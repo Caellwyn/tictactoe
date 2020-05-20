@@ -631,7 +631,7 @@ def load_model(path):
 
 
 class TicRows(layers.Layer):
-    def __init__(self, channels, board_edge=3, connection_mat = None,
+    def __init__(self, channels, board_edge=3, connection_mats = None,
                  rows_share_weights = False):
         super(TicRows, self).__init__()
 
@@ -642,11 +642,11 @@ class TicRows(layers.Layer):
         self.board_size = board_edge**3
         self.row_count =  3 * (self.board_edge + 1)**2 + 1
 
-        if connection_mat is None:
+        if connection_mats is None:
             if mats is None:
                 init_wincon_matrix()
-            connection_mat = mats
-        self.connection_mat = connection_mat
+            connection_mats = mats
+        self.connection_mats = connection_mats
         self.rows_share_weights = rows_share_weights
 
     def init_channel(self, input_shape):
@@ -662,10 +662,18 @@ class TicRows(layers.Layer):
             num_row_weights = 1
         else:
             num_row_weights = self.row_count
-        self.v = self.add_weight(shape=(self.board_edge, self.board_channels,
+        v = self.add_weight(shape=(self.board_edge, self.board_channels,
                                         num_row_weights, self.rows_channels ),
                                  initializer='random_normal',
                                  trainable=True)
+
+        v_reshaped = tf.reshape(v, (1, self.board_edge, self.board_channels, num_row_weights, self.rows_channels ))
+        v_broadcasted = tf.broadcast_to(v_reshaped, (self.board_size, self.board_edge, self.board_channels, self.row_count, self.rows_channels ))
+        mats_reshaped = tf.reshape(self.connection_mats, (self.board_size, self.board_edge, 1, self.row_count, 1))
+        mats_broadcasted = tf.broadcast_to(mats_reshaped, (self.board_size, self.board_edge, self.board_channels, self.row_count, self.rows_channels ))
+        w_unsummed_unshaped = tf.cast(mats_broadcasted, "float32") * v_broadcasted
+        w_summed_unshaped = tf.math.reduce_sum(w_unsummed_unshaped, axis=1)
+        self.w = tf.reshape(w_summed_unshaped, (self.board_channels * self.board_size, self.rows_channels * self.row_count))
 
         self.set_b()
 
@@ -680,36 +688,68 @@ class TicRows(layers.Layer):
                            axis = 0)
 
     def call(self, inputs):
-        return tf.matmul(inputs, self.get_w()) + self.b
+        return tf.matmul(inputs, self.w) + self.b
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.row_count * self.rows_channels)
 
     def get_config(self):
-        return {"channels": self.rows_channels , "board_edge":self.board_edge, "connection_mat":None}
+        return {"channels": self.rows_channels , "board_edge":self.board_edge, "connection_mats":None}
 
-    def get_w(self):
-
-        if self.rows_share_weights:
-            num_row_weights = 1
-        else:
-            num_row_weights = self.row_count
-        v_reshaped = tf.reshape(self.v, (1, self.board_edge, self.board_channels, num_row_weights, self.rows_channels ))
-        v_broadcasted = tf.broadcast_to(v_reshaped, (self.board_size, self.board_edge, self.board_channels, self.row_count, self.rows_channels ))
-        mats_reshaped = tf.reshape(self.connection_mat, (self.board_size, self.board_edge, 1, self.row_count, 1))
-        mats_broadcasted = tf.broadcast_to(mats_reshaped, (self.board_size, self.board_edge, self.board_channels, self.row_count, self.rows_channels ))
-        w_unsummed_unshaped = tf.cast(mats_broadcasted, "float32") * v_broadcasted
-        w_summed_unshaped = tf.math.reduce_sum(w_unsummed_unshaped, axis=1)
-        w = tf.reshape(w_summed_unshaped, (self.board_channels * self.board_size, self.rows_channels * self.row_count))
-        return w
 
 class TacRows(TicRows):
-    def __init__(self, channels, board_edge=3, connection_mat = None,
+    def __init__(self, channels, board_edge=3, connection_mats = None,
            rows_share_weights = False):
-        super(TacRows, self).__init__(channels=channels, board_edge=board_edge,connection_mat=connection_mat)
-
+        super(TacRows, self).__init__(channels=channels, board_edge=board_edge,
+                                      connection_mats=connection_mats,
+                                      rows_share_weights = rows_share_weights)
         self.board_channels = channels
         self.rows_channels = None
+        self.mat = np.sum(self.connection_mats, axis=1)
+        self.class_map = np.sum(mat,axis=1)
+
+    def build(self, input_shape):
+        if not self.rows_share_weights:
+            super(TacRows, self).build(input_shape)
+        else:
+            # count the number of board locations of each class
+            # CREATE W
+            #  initalize weights for each class of size (rows for the class)
+            #  For each class, construct connection matrix with dimention for locaiton in weight matrix
+            #  multiply each class weights by its matrix element by element, doing the correct broadcasting
+            #  sum the results across classes and we have our w
+            # CREATE B
+            #  create weights size (num classes)
+            #  create mask from count array, with deapth representing classes
+            #  multiply weights element by element with correct broadcasting
+            #  sum across classes and we have our b
+            self.init_channel(input_shape)
+            class_sums = np.sum(mat,axis=1, dtype="int32")
+            classes = np.unique(class_sums)
+            weights = [self.add_weight(shape=(cls, self.board_channels, self.rows_channels),
+                                 initializer='random_normal',
+                                 trainable=True) for cls in classes]
+            class_connection_mat = [np.zeros((cls, mat.shape[0], self.board_channels,  mat.shape[1], self.rows_channels,))
+                                    for cls in classes]
+            class_to_index = {cls:index for index, cls in enumerate(classes)}
+            print(class_to_index)
+            for i in range(mat.shape[0]):
+                depth = 0
+                for j in range(mat.shape[1]):
+                    if mat[i, j]:
+                        class_connection_mat[class_to_index[class_sums[i]]][depth, i, :, j, :] = 1
+                        depth += 1
+            weights_mats = []
+            for i in range(len(classes)):
+                weights_reshaped = tf.reshape(weights[i], (classes[i], 1, self.board_channels, 1, self.rows_channels))
+                weights_broadcasted = tf.broadcast_to(weights_reshaped, (classes[i],mat.shape[0], self.board_channels,  mat.shape[1], self.rows_channels,))
+                weights_mat_unsummed = weights_broadcasted * class_connection_mat[i]
+                weights_mats.append(tf.reduce_sum(weights_mat_unsummed, axis=0))
+            w_unshaped = tf.reduce_sum(weights_mats, axis=0)
+
+            self.w =tf.reshape(w_unshaped, (self.board_channels * self.board_size, self.rows_channels * self.row_count))
+            self.set_b() #XXX FIXME B need to be correctly implemented
+
 
     def init_channel(self, input_shape):
         if input_shape[-1] % self.row_count != 0:
@@ -718,7 +758,7 @@ class TacRows(TicRows):
         self.rows_channels = input_shape[-1] // self.row_count
 
     def call(self,inputs):
-        return tf.matmul(inputs, self.get_w(), transpose_b=True) + self.b
+        return tf.matmul(inputs, self.w, transpose_b=True) + self.b
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.board_size * self.board_channels)
