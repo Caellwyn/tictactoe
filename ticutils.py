@@ -49,19 +49,70 @@ def init_wincon_matrix():
 
     col = 0
 
-    # straights
-    for x in range(3):
-        for y in range(3):
+    # straights across edge
+    for x in [0,2]:
+        for y in [0,2]:
             for z in range(3):
                 put()
             col += 1
-        for z in range(3):
+        for z in [0,2]:
             for y in range(3):
                 put()
             col += 1
 
-    for z in range(3):
-        for y in range(3):
+    for z in [0,2]:
+        for y in [0,2]:
+            for x in range(3):
+                put()
+            col += 1
+    # Straights across face
+
+    for x in [1]:
+        for y in [0,2]:
+            for z in range(3):
+                put()
+            col += 1
+        for z in [0,2]:
+            for y in range(3):
+                put()
+            col += 1
+
+    for x in [0,2]:
+        for y in [1]:
+            for z in range(3):
+                put()
+            col += 1
+        for z in [1]:
+            for y in range(3):
+                put()
+            col += 1
+
+    for z in [1]:
+        for y in [0,2]:
+            for x in range(3):
+                put()
+            col += 1
+
+    for z in [0,2]:
+        for y in [1]:
+            for x in range(3):
+                put()
+            col += 1
+
+    # Straights through middle
+
+    for x in [1]:
+        for y in [1]:
+            for z in range(3):
+                put()
+            col += 1
+        for z in [1]:
+            for y in range(3):
+                put()
+            col += 1
+
+    for z in [1]:
+        for y in [1]:
             for x in range(3):
                 put()
             col += 1
@@ -117,6 +168,7 @@ def init_wincon_matrix():
         y = 2 - x
         put()
     col += 1
+
     mat = np.sum(mats, axis=1)
 
 
