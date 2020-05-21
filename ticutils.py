@@ -49,6 +49,7 @@ def init_wincon_matrix():
 
     col = 0
 
+    # straights
     for x in range(3):
         for y in range(3):
             for z in range(3):
@@ -58,6 +59,15 @@ def init_wincon_matrix():
             for y in range(3):
                 put()
             col += 1
+
+    for z in range(3):
+        for y in range(3):
+            for x in range(3):
+                put()
+            col += 1
+
+    # Half diagonal
+    for x in range(3):
         for y in range(3):
             z = y
             put()
@@ -68,10 +78,6 @@ def init_wincon_matrix():
         col += 1
 
     for z in range(3):
-        for y in range(3):
-            for x in range(3):
-                put()
-            col += 1
         for y in range(3):
             x = y
             put()
@@ -91,6 +97,7 @@ def init_wincon_matrix():
             put()
         col += 1
 
+    # Full diagonal
     for x in range(3):
         y = z = x
         put()
