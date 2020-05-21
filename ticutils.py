@@ -739,7 +739,6 @@ class TacRows(TicRows):
             class_connection_mat = [np.zeros((cls, mat.shape[0], self.board_channels,  mat.shape[1], self.rows_channels,))
                                     for cls in classes]
             class_to_index = {cls:index for index, cls in enumerate(classes)}
-            print(class_to_index)
             for i in range(mat.shape[0]):
                 depth = 0
                 for j in range(mat.shape[1]):
@@ -755,8 +754,20 @@ class TacRows(TicRows):
             w_unshaped = tf.reduce_sum(weights_mats, axis=0)
 
             self.w =tf.reshape(w_unshaped, (self.board_channels * self.board_size, self.rows_channels * self.row_count))
-            self.set_b() #XXX FIXME B need to be correctly implemented
 
+            b_weights = self.add_weight(shape=(len(classes), self.board_channels,),
+                                    initializer='random_normal',
+                                 trainable=True)
+            b_connections = np.zeros((len(classes), self.board_size),dtype='float32')
+            for i in range(len(class_sums)):
+                b_connections[class_to_index[class_sums[i]], i] = 1
+            b_weights_reshaped = tf.reshape(b_weights, (len(classes), 1, self.board_channels))
+            b_weights_broadcasted = tf.broadcast_to(b_weights_reshaped, (len(classes), self.board_size, self.board_channels))
+            b_connections_reshaped = tf.reshape(b_connections, (len(classes), self.board_size, 1))
+            b_connections_broadcasted = tf.broadcast_to(b_connections_reshaped, (len(classes), self.board_size, self.board_channels))
+            b_unshaped_unsummed = b_connections_broadcasted * b_weights_broadcasted
+            b_unshaped = tf.reduce_sum(b_unshaped_unsummed, axis=0)
+            self.b = tf.reshape(b_unshaped, (self.board_channels * self.board_size,))
 
     def init_channel(self, input_shape):
         if input_shape[-1] % self.row_count != 0:
