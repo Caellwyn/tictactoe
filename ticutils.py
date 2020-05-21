@@ -190,46 +190,28 @@ class SmartPlayer():
         self.iq = iq
 
     def get_move(self, board):
-        legal_moves = board.legal_moves()
-        if mat is None:
-            init_wincon_matrix()
-        if board.turn == 'Os':
-            current_board = np.concatenate([board.arr[27:], board.arr[:27]], axis=0)
-            current_board = current_board.reshape(1, 54)
-        else:
-            current_board = board.arr.reshape(1, 54)
-        my_progress = np.dot(current_board[:, :27], mat)
-        o_progress = np.dot(current_board[:, 27:], mat)
-        winning_moves = []
-        m_score = np.zeros((27,))
-        opponent_blocker = []
-        for m in legal_moves:
-            for c in range(mat.shape[1]):
-                if mat[m, c]:
-                    if my_progress[0, c] == 2 and o_progress[0, c] == 0:
-                        winning_moves.append(m)
-                    if my_progress[0, c] == 0 and o_progress[0, c] == 2:
-                        opponent_blocker.append(m)
-                    if my_progress[0, c] + o_progress[0, c] == 1:
-                        m_score[m] += 2
-                    if my_progress[0, c] + o_progress[0, c] == 0:
-                        m_score[m] += 1
-        if winning_moves:
-            return random.choice(winning_moves)
-        if opponent_blocker:
-            return random.choice(opponent_blocker)
-        if np.max(m_score) == 0:
-            return random.choice(legal_moves)
-        for i in range(len(legal_moves-1)):
-            if random.random() > self.iq:
-                best_move = random.choice(np.concatenate(np.argwhere(m_score == np.max(m_score))))
-                m_score[best_move] = 0
+        board.analyze()
+        if board.winning_moves:
+            return random.choice(board.winning_moves)
 
+        if board.opponent_blocker:
+            return random.choice(board.opponent_blocker)
+
+        for i in range(len(board.legal_moves()-1)):
+            if random.random() > self.iq:
+                best_move = random.choice(np.concatenate(np.argwhere(board.m_score == np.max(board.m_score))))
+                board.m_score[best_move] = 0
             else:
                 break
-        return random.choice(np.concatenate(np.argwhere(m_score == np.max(m_score))))
+
+        if np.max(board.m_score) == 0:
+            return random.choice(board.legal_moves())
+
+        return random.choice(np.concatenate(np.argwhere(board.m_score == np.max(board.m_score))))
+
     def finalize(self, board, is_x):
         pass
+
 
 class HumanPlayer:
     def __init__(self, name="Human"):
@@ -333,40 +315,53 @@ class AIPlayer:
 
         # backprop
         if self.lastboard is not None:
-            Y = np.full((1, 27), 2.)
-            for move in range(27):
-                if move not in self.lastlegal:
-                    Y[0, move] = -2
+            self.lastboard.analyze()
+            Y = self.construct_y()
             Y[0, self.lastmove] = move_values[0, current_move]
-            self.print(f"XXX X is {self.lastboard}\n Yhat is {self.last_move_values}, \nY is {Y}", level=2)
+            shaped_board = self.lastboard.arr.reshape(1, 54)
+            self.print(f"XXX X is {shaped_board}\n Yhat is {self.last_move_values}, \nY is {Y}", level=2)
             if self.train:
-                history = self.model.fit(self.lastboard, Y, verbose=self.verbose)
+                history = self.model.fit(shaped_board, Y, verbose=self.verbose)
                 self.losses.append(history.history['loss'][0])
 
             elif self.model.optimizer is not None:
-                loss1 = self.model.evaluate(self.lastboard, Y, verbose=self.verbose)
+                loss1 = self.model.evaluate(shaped_board, Y, verbose=self.verbose)
                 self.losses.append(loss1)
-        self.lastboard = current_board.copy()
+        self.lastboard = board.copy()
         self.lastmove = current_move
         self.lastlegal = legal_moves
         self.last_move_values = move_values
 
         return current_move
 
+    def construct_y(self):
+        Y = np.full((1, 27), 2.)
+        for move in range(27):
+            if move not in self.lastlegal:
+                Y[0, move] = -2
+        if self.lastboard.opponent_blocker:
+            Y.fill(-1)
+            for move in self.lastboard.opponent_blocker:
+                Y[0, move] = 2
+        for move in self.lastboard.winning_moves:
+            Y[0, move] = 1
+        return Y
 
     def finalize(self, board, is_x):
+        self.lastboard.analyze()
+        Y = self.construct_y()
+        Y[0, self.lastmove] = board.score * (-1 if not is_x else 1) + 4
+        shaped_board = self.lastboard.arr.reshape(1, 54)
+
+        self.print(f"XXX Final X is {shaped_board}\n Yhat is {self.last_move_values}, \nY is {Y}", level=2)
         if self.train:
-            Y = np.full((1, 27), 2.)
-            for move in range(27):
-                if move not in self.lastlegal:
-                    Y[0, move] = -2
-            Y[0, self.lastmove] = board.score * (-1 if not is_x else 1) + 4
-            self.print(f"XXX Final X is {self.lastboard}\n Yhat is {self.last_move_values}, \nY is {Y}", level=2)
-            history = self.model.fit(self.lastboard, Y, verbose=self.verbose)
+            history = self.model.fit(shaped_board, Y, verbose=self.verbose)
             self.losses.append(history.history['loss'][0])
             self.print(f"XXX average loss is {sum(self.losses) / len(self.losses)}")
             self.lastloss = self.losses
-
+        elif self.model.optimizer is not None:
+            loss1 = self.model.evaluate(shaped_board, Y, verbose=self.verbose)
+            self.losses.append(loss1)
         self.lastboard = None
         self.lastmove = None
         self.lastlegal = None
@@ -388,10 +383,46 @@ class Board:
         self.player1 = player1
         self.player2 = player2
 
+    def copy(self):
+        new=Board(self.player1, self.player2)
+        new.arr = self.arr.copy()
+        new.turn = self.turn
+        new.score = self.score
+        return new
+
     def legal_moves(self):
+        # XXX This breaks if there are no legal moves FIXME
         moves = np.concatenate(np.argwhere(
             (self.arr[:27] == 0) & (self.arr[27:] == 0)))
         return moves
+
+
+
+    def analyze(self):
+        if mat is None:
+            init_wincon_matrix()
+        if self.turn == 'Os':
+            current_board = np.concatenate([self.arr[27:], self.arr[:27]], axis=0)
+            current_board = current_board.reshape(1, 54)
+        else:
+            current_board = self.arr.reshape(1, 54)
+        my_progress = np.dot(current_board[:, :27], mat)
+        o_progress = np.dot(current_board[:, 27:], mat)
+        self.winning_moves = []
+        self.opponent_blocker = []
+        self.m_score = np.zeros((27,))
+
+        for m in self.legal_moves():
+            for c in range(mat.shape[1]):
+                if mat[m, c]:
+                    if my_progress[0, c] == 2 and o_progress[0, c] == 0:
+                        self.winning_moves.append(m)
+                    if my_progress[0, c] == 0 and o_progress[0, c] == 2:
+                        self.opponent_blocker.append(m)
+                    if my_progress[0, c] + o_progress[0, c] == 1:
+                        self.m_score[m] += 2
+                    if my_progress[0, c] + o_progress[0, c] == 0:
+                        self.m_score[m] += 1
 
     def display(self):
         def getvals(i):
@@ -458,7 +489,6 @@ class Board:
         else:
             islegal = False
         return islegal
-
 
 def mikesfirstmodel():
     model = keras.Sequential([
