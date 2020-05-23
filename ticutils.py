@@ -261,7 +261,7 @@ class HumanPlayer:
 
 class AIPlayer:
 
-    def __init__(self, model, name="CPU", train=False, verbose=1, exploration = 0):
+    def __init__(self, model, name="CPU", train=False, verbose=1, exploration = 0, train_blockers = False, train_winning_moves = True):
         self.model = model
         self.train = train
         self.lastboard = None
@@ -278,6 +278,8 @@ class AIPlayer:
         self.exploration = exploration
         self.last_move_values = None
         self.model.opponent_history = []
+        self.train_blockers = train_blockers
+        self.train_winning_moves = train_winning_moves
 
 
     def print(self, *args, **kwargs):
@@ -336,15 +338,19 @@ class AIPlayer:
 
     def construct_y(self):
         Y = np.full((1, 27), 2.)
+
+        if self.lastboard.opponent_blocker and self.train_blockers:
+            Y.fill(3)
+            for move in self.lastboard.opponent_blocker:
+                Y[0, move] = 2
+                self.print(f'XXX A chance to block a win was detected at: {move}', level=2)
+        if self.train_winning_moves:
+            for move in self.lastboard.winning_moves:
+                Y[0, move] = 1
+                self.print(f'XXX A winning move was detected at: {move}', level=2)
         for move in range(27):
             if move not in self.lastlegal:
                 Y[0, move] = -2
-        if self.lastboard.opponent_blocker:
-            Y.fill(-1)
-            for move in self.lastboard.opponent_blocker:
-                Y[0, move] = 2
-        for move in self.lastboard.winning_moves:
-            Y[0, move] = 1
         return Y
 
     def finalize(self, board, is_x):
@@ -392,8 +398,11 @@ class Board:
 
     def legal_moves(self):
         # XXX This breaks if there are no legal moves FIXME
-        moves = np.concatenate(np.argwhere(
-            (self.arr[:27] == 0) & (self.arr[27:] == 0)))
+        tempmoves = np.argwhere((self.arr[:27] == 0) & (self.arr[27:] == 0))
+        if tempmoves.shape[0] == 0:
+            moves = np.empty(0)
+        else:
+            moves = np.concatenate(tempmoves)
         return moves
 
 
