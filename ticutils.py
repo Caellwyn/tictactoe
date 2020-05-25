@@ -6,6 +6,7 @@ import keras
 from keras import layers
 import matplotlib.pyplot as plt
 import os
+import pickle
 import statistics as stat
 import pandas as pd
 from google.colab import drive
@@ -34,6 +35,7 @@ def flip_coin():
 mat = None
 
 mats = None
+
 
 def init_wincon_matrix():
     step = [0]
@@ -261,23 +263,28 @@ class HumanPlayer:
 
 class AIPlayer:
 
-    def __init__(self, model, name="CPU", train=False, verbose=1, exploration = 0, train_blockers = False, train_winning_moves = True):
+    def __init__(self, model, name="CPU", train=False, verbose=1, exploration = 0,
+                 train_blockers = False, train_winning_moves = True, lastboard = None,
+                 lastmove = None, lastlegal = None, losses = None,
+                 current_illegal_move_count = 0, last_illegal_move_count = None,
+                 current_move_count = 0, last_move_count = None, lastloss=None,
+                 last_move_values = None, opponent_history=None):
         self.model = model
         self.train = train
-        self.lastboard = None
-        self.lastmove = None
-        self.lastlegal = None
+        self.lastboard = lastboard
+        self.lastmove = lastmove
+        self.lastlegal = lastlegal
         self.name = name
-        self.losses = []
+        self.losses = [] if losses is None else losses
         self.verbose = verbose
-        self.current_illegal_move_count = 0
-        self.last_illegal_move_count = None
-        self.current_move_count = 0
-        self.last_move_count = None
-        self.lastloss = [0,0]
+        self.current_illegal_move_count = current_illegal_move_count
+        self.last_illegal_move_count = last_illegal_move_count
+        self.current_move_count = current_move_count
+        self.last_move_count = last_move_count
+        self.lastloss = [0,0] if lastloss is None else lastloss
         self.exploration = exploration
-        self.last_move_values = None
-        self.model.opponent_history = []
+        self.last_move_values = last_move_values
+        self.opponent_history = [] if opponent_history is None else opponent_history
         self.train_blockers = train_blockers
         self.train_winning_moves = train_winning_moves
 
@@ -300,6 +307,7 @@ class AIPlayer:
         else:
             current_board = board.arr.reshape(1, 54)
 
+        print(f"XXX REMOVE ME currentboard is {current_board}")
         move_values = self.model.predict(current_board)
         current_move = np.argmax(move_values)
         proposed_move = current_move
@@ -352,6 +360,27 @@ class AIPlayer:
             if move not in self.lastlegal:
                 Y[0, move] = -2
         return Y
+
+    def save(self):
+        drive.mount('/gdrive')
+        modelpath = DRIVEPATH + self.model.name + '_model.h5'
+        aipath = DRIVEPATH + self.model.name + '_ai.pickle'
+        self.model.save(modelpath)
+        modeltemp = self.model
+        self.model = None
+        pickle.dump(self,open(aipath,'wb'))
+        self.model = modeltemp
+
+    @staticmethod
+    def load(name):
+        drive.mount('/gdrive')
+        modelpath = DRIVEPATH + name + '_model.h5'
+        aipath = DRIVEPATH + name + '_ai.pickle'
+        model = load_model(modelpath)
+        ai = pickle.load(open(aipath,'rb'))
+        ai.model = model
+        return ai
+
 
     def finalize(self, board, is_x):
         self.lastboard.analyze()
@@ -544,7 +573,8 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
     ai.train = train
     ai.verbose = 0
     opponentnames = [opponent.name for opponent in opponents]
-    ai.model.opponent_history.append((opponentnames,epochs))
+    if train:
+        ai.opponent_history.append((opponentnames,epochs))
     try:
         isxs = True
         scores = ([], [])
@@ -652,27 +682,25 @@ def training_loop(ai, opponents=[BaselinePlayer()], epochs=1, alpha=.9,
         ai.verbose = cache_verbose
         ai.train = cache_train
 
-def eval_loop(model,verbose=0,save=True):
+def eval_loop(ai,verbose=0,save=True):
     if save:
         drive.mount('/gdrive')
         savepath = DRIVEPATH + 'Experiment Dataframe.csv'
-        df = pd.read_csv(savepath, index_col='model_name')
-        if model.name in df.index:
+        df = pd.read_csv(savepath, index_col=0)
+        if model.name in df.columns:
             raise ValueError('model with this name already exists in the Experimental Database.'
             'Please choose a new name for your model')
-    ai = AIPlayer(model, train=False, verbose=verbose)
+    exploretemp = ai.exploration
+    ai.exploration = 0
     stats = training_loop(ai,[SmartPlayer(.9)],train=False, epochs=1000)
-    data = pd.DataFrame({'model_name':[model.name],
-                    'model_summary':[model.get_config()],
-                    'optimizer':[model.optimizer.get_config()],
-                    'opponent_history':[model.opponent_history],
-                    'eval_stats':[stats]}).set_index('model_name')
+    ai.exploration = exploretemp
+    data = [ai.model.name,ai.model.get_config(),ai.model.optimizer.get_config(),ai.,ai.model.opponent_history] + [v for k,v in stats.items()]
+
     if save:
-        df = df.append(data, verify_integrity=True,)
+        df[data[0]] = data[1:]
         df.to_csv(savepath)
         print('saving results to: ' + savepath)
-    return data
-
+    return df
 def running_average(data, alpha):
     ret = ([], [])
     for i in range(2):
@@ -723,7 +751,7 @@ class TicTacLoss:
 
 
 def load_model(path):
-    with keras.utils.CustomObjectScope({"TicTacLoss": TicTacLoss}):
+    with keras.utils.CustomObjectScope({"TicTacLoss": TicTacLoss, "TicRows": TicRows, "TacRows": TacRows}):
         model = keras.models.load_model(path)
         return model
 
@@ -792,7 +820,7 @@ class TicRows(layers.Layer):
         return (input_shape[0], self.row_count * self.rows_channels)
 
     def get_config(self):
-        return {"channels": self.rows_channels , "board_edge":self.board_edge, "connection_mats":None}
+        return {"channels": self.rows_channels , "board_edge":self.board_edge, "connection_mats":None,'rows_share_weights': self.rows_share_weights}
 
 
 class TacRows(TicRows):
