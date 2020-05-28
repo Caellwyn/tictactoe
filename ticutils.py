@@ -694,13 +694,14 @@ def eval_loop(ai,verbose=0,save=True):
     ai.exploration = 0
     stats = training_loop(ai,[SmartPlayer(.9)],train=False, epochs=1000)
     ai.exploration = exploretemp
-    data = [ai.model.name,ai.model.get_config(),ai.model.optimizer.get_config(),ai.,ai.model.opponent_history] + [v for k,v in stats.items()]
+    data = [ai.model.name,ai.model.get_config(),ai.model.optimizer.get_config(),ai.model.opponent_history] + [v for k,v in stats.items()]
 
     if save:
         df[data[0]] = data[1:]
         df.to_csv(savepath)
         print('saving results to: ' + savepath)
     return df
+
 def running_average(data, alpha):
     ret = ([], [])
     for i in range(2):
