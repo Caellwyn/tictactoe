@@ -1,2 +1,12 @@
 # tictactoe
 3d tic tac toe ML
+
+We set out to create a neural network that plays autonomously plays tic-tac-toe on a 3x3x3 cube space.  This turns out to be an especially difficult task, as learning sets and labels are complex to implement.  Our solution, borrowed from Michiel vand Steeg, Madalina M. Drugan, and Marco Wiering in their 2015 paper ["Temporal Difference Learning for the Game Tic-Tac-Toe 3D: Applying Structure to Neural Networks."](https://www.ai.rug.nl/~mwiering/GROUP/ARTICLES/TTT3D_FINAL.pdf).  We implemented a reward system that rewarded each move after the opponents next move using the expected value of the following move by the machine.  This allowed labels, wins and losses, to trickle backward from the end of game to previous moves over the course of learning iterations.  Early in the learning process rewards are random, but become more meaningful as more games are won and loss.
+
+We also created controls to help the network learn the rules, giving immediate negative feedback for illegal moves.  Unfortunately this too commonly led to what we dubbed, 'The Vally of Despaire.'  The network began predicting it's own loss in every game and learning ceases.  We introduced additional positive reinforcement when the network blocked an expected opponent win, a 2 in a row.
+
+We used as series of algorithmic opponents for our neural network to play against, based on a matrix run 'perfect' player that always played the highest value immediate move and required multi-step strategy to defeat.  We then created adjusted players by introducing randomness into that 'perfect player.'  Our network could learn to defeat these 'dumber' players by learning specific patterns of moves that would result in wins in 4 moves, but were not resilient to any level of strategy, and a human player could quickly see and defeat the pattern.  Our greatest success was such a strategy that could defeat the 'perfect' player by working two moves ahead to set the stage to specifically defeat the 'perfect' player strategy.  However, this strategy was static and specific to that player.
+
+Another approach we took was to create a custom sparse layer that specifically processed the cube as sets of triple inline units rather than individual squares, and then fed that into a dense layer.  This was not successful either.
+
+In the end, we did not create an neural network player that was a satisfying opponent for a human player, however, here are our attempts to inform any future researchers into this difficult problem.
