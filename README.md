@@ -1,4 +1,5 @@
-Neural Network 3D Tic Tac Toe player
+# Neural Network 3D Tic Tac Toe player
+
 Tic Tac Toe is quick game with some simple strategies to win. We thought teaching a neural network to play Tic Tac Toe would be a good way to sharpen our programming and machine learning skills. We coded our model and our utility library in Python 3.7 and used Keras with a Tensorflow backend to build and evaluate our graph.
 
 Tic Tac Toe is a solved game, and there exists a strategy for X's that always wins or ties. We hoped that could expand the space of possible strategies by using a 3D version of Tic Tac Toe. In this version, rows can be filled in straight lines between levels, as well as on the same level. This expands the space of possible strategies.
